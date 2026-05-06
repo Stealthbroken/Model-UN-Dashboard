@@ -1,0 +1,53 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = "file:../mun.db"
+}
+
+model Meeting {
+  id               Int       @id @default(autoincrement())
+  date             DateTime  @unique
+  title            String    @default("Weekly MUN Meeting")
+  location         String    @default("Room 137")
+  agenda           String?
+  notes            String?
+  responsibleEmail String?
+  reminderSentAt   DateTime?
+  archivedAt       DateTime?
+  createdAt        DateTime  @default(now())
+
+  topicGuide   TopicGuide?
+  announcement ClassroomAnnouncement?
+}
+
+model TopicGuide {
+  id         Int      @id @default(autoincrement())
+  filename   String
+  path       String
+  meetingId  Int      @unique
+  meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  uploadedAt DateTime @default(now())
+}
+
+model ClassroomAnnouncement {
+  id           Int       @id @default(autoincrement())
+  body         String
+  scheduledFor DateTime?
+  status       String    @default("draft")
+  sentAt       DateTime?
+  meetingId    Int       @unique
+  meeting      Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  createdAt    DateTime  @default(now())
+}
+
+model InstagramPost {
+  id        Int       @id @default(autoincrement())
+  caption   String
+  imagePath String?
+  status    String    @default("draft")
+  postedAt  DateTime?
+  createdAt DateTime  @default(now())
+}
