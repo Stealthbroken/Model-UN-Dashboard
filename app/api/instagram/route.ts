@@ -1,12 +1,24 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { writeFile } from "fs/promises";
-import { join } from "path";
-import { v4 as uuidv4 } from "uuid";
+
+// Images are stored as bytes in the database (not on disk) so the app works
+// on hosts with an ephemeral/read-only filesystem.
+const MAX_BYTES = 8 * 1024 * 1024; // 8 MB
+
+// Fields safe to return as JSON — never include the raw `imageData` blob.
+const publicFields = {
+  id: true,
+  caption: true,
+  imagePath: true,
+  status: true,
+  postedAt: true,
+  createdAt: true,
+} as const;
 
 export async function GET() {
   const posts = await prisma.instagramPost.findMany({
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
+    select: publicFields,
   });
   return NextResponse.json(posts);
 }
@@ -22,14 +34,17 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Caption is required" }, { status: 400 });
   }
 
-  let imagePath: string | null = null;
+  let imageData: Buffer | undefined;
+  let imageMimeType: string | undefined;
   if (file && file.size > 0) {
-    const ext = file.name.split(".").pop() || "jpg";
-    const storedName = `ig-${uuidv4()}.${ext}`;
-    const filePath = join(process.cwd(), "public", "uploads", storedName);
-    const bytes = await file.arrayBuffer();
-    await writeFile(filePath, Buffer.from(bytes));
-    imagePath = `/uploads/${storedName}`;
+    if (file.size > MAX_BYTES) {
+      return NextResponse.json(
+        { error: "Image too large — 8 MB maximum" },
+        { status: 400 },
+      );
+    }
+    imageData = Buffer.from(await file.arrayBuffer());
+    imageMimeType = file.type || "image/jpeg";
   }
 
   const id = idRaw ? parseInt(idRaw) : null;
@@ -45,12 +60,21 @@ export async function POST(request: NextRequest) {
       where: { id },
       data: {
         caption,
-        ...(imagePath ? { imagePath } : {}),
+        ...(imageData
+          ? { imageData, imageMimeType, imagePath: `/api/instagram/image/${id}` }
+          : {}),
       },
+      select: publicFields,
     });
   } else {
-    post = await prisma.instagramPost.create({
-      data: { caption, imagePath, status: "draft" },
+    const created = await prisma.instagramPost.create({
+      data: { caption, status: "draft", imageData, imageMimeType },
+    });
+    // imagePath needs the row id, so set it in a follow-up update.
+    post = await prisma.instagramPost.update({
+      where: { id: created.id },
+      data: imageData ? { imagePath: `/api/instagram/image/${created.id}` } : {},
+      select: publicFields,
     });
   }
 
@@ -62,6 +86,7 @@ export async function POST(request: NextRequest) {
         status: result.ok ? "posted" : "failed",
         postedAt: result.ok ? new Date() : null,
       },
+      select: publicFields,
     });
     return NextResponse.json({ ...updated, error: result.error });
   }

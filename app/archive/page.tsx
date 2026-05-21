@@ -12,7 +12,8 @@ export default async function ArchivePage() {
     },
     orderBy: { date: "desc" },
     include: {
-      topicGuide: true,
+      // Only need existence — never pull the PDF blob into a list view.
+      topicGuide: { select: { id: true } },
       announcement: true,
     },
   });
