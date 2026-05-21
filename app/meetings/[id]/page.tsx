@@ -13,10 +13,32 @@ export default async function MeetingPage({ params }: { params: { id: string } }
     include: {
       topicGuide: true,
       announcement: true,
+      tasks: { orderBy: { sortOrder: "asc" } },
     },
   });
 
   if (!meeting) notFound();
 
-  return <MeetingDetail meeting={JSON.parse(JSON.stringify(meeting))} />;
+  const executives = await prisma.executive.findMany({
+    where: { active: true },
+    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+  });
+
+  const previousMeeting = await prisma.meeting.findFirst({
+    where: { date: { lt: meeting.date } },
+    orderBy: { date: "desc" },
+    include: { tasks: true },
+  });
+
+  const previousUnfinishedCount = previousMeeting
+    ? previousMeeting.tasks.filter((t) => !t.completed).length
+    : 0;
+
+  return (
+    <MeetingDetail
+      meeting={JSON.parse(JSON.stringify(meeting))}
+      executives={JSON.parse(JSON.stringify(executives))}
+      previousUnfinishedCount={previousUnfinishedCount}
+    />
+  );
 }

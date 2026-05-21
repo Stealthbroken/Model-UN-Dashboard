@@ -19,6 +19,25 @@ interface ClassroomAnnouncement {
   sentAt: string | null;
 }
 
+interface Task {
+  id: number;
+  description: string;
+  completed: boolean;
+  completedAt: string | null;
+  sortOrder: number;
+  meetingId: number;
+  executiveId: number;
+}
+
+interface Executive {
+  id: number;
+  name: string;
+  role: string;
+  email: string | null;
+  active: boolean;
+  sortOrder: number;
+}
+
 interface Meeting {
   id: number;
   date: string;
@@ -28,8 +47,12 @@ interface Meeting {
   notes: string | null;
   responsibleEmail: string | null;
   archivedAt: string | null;
+  minutesDocId: string | null;
+  minutesDocUrl: string | null;
+  minutesDocCreatedAt: string | null;
   topicGuide: TopicGuide | null;
   announcement: ClassroomAnnouncement | null;
+  tasks: Task[];
 }
 
 function toLocalInputValue(date: Date): string {
@@ -44,7 +67,15 @@ function defaultAnnouncementTime(meetingDate: Date): string {
   return toLocalInputValue(d);
 }
 
-export function MeetingDetail({ meeting }: { meeting: Meeting }) {
+export function MeetingDetail({
+  meeting,
+  executives,
+  previousUnfinishedCount,
+}: {
+  meeting: Meeting;
+  executives: Executive[];
+  previousUnfinishedCount: number;
+}) {
   const router = useRouter();
   const meetingDate = new Date(meeting.date);
 
@@ -57,6 +88,21 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
 
       {/* Meeting Header */}
       <MeetingHeader meeting={meeting} onUpdate={() => router.refresh()} />
+
+      {/* Executives & Tasks */}
+      <div className="mt-6">
+        <ExecutivesTasksSection
+          meeting={meeting}
+          executives={executives}
+          previousUnfinishedCount={previousUnfinishedCount}
+          onChange={() => router.refresh()}
+        />
+      </div>
+
+      {/* Minutes Doc */}
+      <div className="mt-6">
+        <MinutesDocSection meeting={meeting} onChange={() => router.refresh()} />
+      </div>
 
       {/* Two Subsections (Instagram now lives in its own tab) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
@@ -72,6 +118,339 @@ export function MeetingDetail({ meeting }: { meeting: Meeting }) {
           onChange={() => router.refresh()}
         />
       </div>
+    </div>
+  );
+}
+
+/* ───────── Executives & Tasks Section ───────── */
+function ExecutivesTasksSection({
+  meeting,
+  executives,
+  previousUnfinishedCount,
+  onChange,
+}: {
+  meeting: Meeting;
+  executives: Executive[];
+  previousUnfinishedCount: number;
+  onChange: () => void;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const tasksByExec = new Map<number, Task[]>();
+  for (const t of meeting.tasks) {
+    if (!tasksByExec.has(t.executiveId)) tasksByExec.set(t.executiveId, []);
+    tasksByExec.get(t.executiveId)!.push(t);
+  }
+
+  // Group orphans (tasks whose exec has been deactivated/deleted)
+  const activeExecIds = new Set(executives.map((e) => e.id));
+  const orphanTasks = meeting.tasks.filter((t) => !activeExecIds.has(t.executiveId));
+
+  const totalTasks = meeting.tasks.length;
+  const completedTasks = meeting.tasks.filter((t) => t.completed).length;
+
+  async function toggleTask(task: Task) {
+    setBusy(`toggle-${task.id}`);
+    await fetch(`/api/tasks/${task.id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ completed: !task.completed }),
+    });
+    setBusy(null);
+    onChange();
+  }
+
+  async function addTask(executiveId: number, description: string) {
+    if (!description.trim()) return;
+    setBusy(`add-${executiveId}`);
+    await fetch("/api/tasks", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ meetingId: meeting.id, executiveId, description }),
+    });
+    setBusy(null);
+    onChange();
+  }
+
+  async function deleteTask(taskId: number) {
+    setBusy(`del-${taskId}`);
+    await fetch(`/api/tasks/${taskId}`, { method: "DELETE" });
+    setBusy(null);
+    onChange();
+  }
+
+  async function copyFromLast() {
+    setBusy("copy");
+    setMessage(null);
+    const res = await fetch(`/api/meetings/${meeting.id}/copy-tasks`, { method: "POST" });
+    const data = await res.json();
+    setMessage(
+      data.copied
+        ? `Copied ${data.copied} unfinished task${data.copied === 1 ? "" : "s"} from the last meeting.`
+        : data.message || "Nothing to copy.",
+    );
+    setBusy(null);
+    onChange();
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+      <div className="flex items-center justify-between mb-3 gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <h3 className="font-semibold text-gray-900">Executives &amp; Weekly Tasks</h3>
+          <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+            {completedTasks}/{totalTasks} done
+          </span>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={copyFromLast}
+            disabled={busy === "copy" || previousUnfinishedCount === 0}
+            className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            title={
+              previousUnfinishedCount === 0
+                ? "No unfinished tasks on the previous meeting."
+                : `Copy ${previousUnfinishedCount} unfinished task(s) from the previous meeting`
+            }
+          >
+            {busy === "copy" ? "Copying..." : `↻ Copy unfinished from last meeting (${previousUnfinishedCount})`}
+          </button>
+          <Link
+            href="/executives"
+            className="text-xs text-gray-500 hover:underline"
+          >
+            Manage roster →
+          </Link>
+        </div>
+      </div>
+
+      {message && (
+        <p className="text-xs text-green-600 mb-2">{message}</p>
+      )}
+
+      {executives.length === 0 ? (
+        <div className="text-sm text-gray-500 border border-dashed border-gray-200 rounded-lg p-4 text-center">
+          No executives on the roster yet.{" "}
+          <Link href="/executives" className="text-primary-600 hover:underline">
+            Add some
+          </Link>{" "}
+          to start assigning weekly tasks.
+        </div>
+      ) : (
+        <ul className="divide-y divide-gray-100">
+          {executives.map((e) => (
+            <ExecutiveTaskRow
+              key={e.id}
+              exec={e}
+              tasks={tasksByExec.get(e.id) || []}
+              busy={busy}
+              onToggle={toggleTask}
+              onAdd={addTask}
+              onDelete={deleteTask}
+            />
+          ))}
+        </ul>
+      )}
+
+      {orphanTasks.length > 0 && (
+        <div className="mt-3 border border-amber-200 bg-amber-50 rounded-lg p-3">
+          <p className="text-xs font-semibold text-amber-800 mb-1">
+            Tasks from former executives ({orphanTasks.length})
+          </p>
+          <ul className="space-y-1">
+            {orphanTasks.map((t) => (
+              <li key={t.id} className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={t.completed}
+                  onChange={() => toggleTask(t)}
+                  disabled={busy === `toggle-${t.id}`}
+                />
+                <span className={t.completed ? "line-through text-gray-400" : "text-gray-700"}>
+                  {t.description}
+                </span>
+                <button
+                  onClick={() => deleteTask(t.id)}
+                  className="ml-auto text-xs text-red-500 hover:underline"
+                >
+                  Delete
+                </button>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ExecutiveTaskRow({
+  exec,
+  tasks,
+  busy,
+  onToggle,
+  onAdd,
+  onDelete,
+}: {
+  exec: Executive;
+  tasks: Task[];
+  busy: string | null;
+  onToggle: (t: Task) => void;
+  onAdd: (executiveId: number, description: string) => void;
+  onDelete: (id: number) => void;
+}) {
+  const [input, setInput] = useState("");
+  const doneCount = tasks.filter((t) => t.completed).length;
+
+  function submit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!input.trim()) return;
+    onAdd(exec.id, input);
+    setInput("");
+  }
+
+  return (
+    <li className="py-3">
+      <div className="flex items-baseline justify-between gap-2 mb-1.5">
+        <div>
+          <span className="font-medium text-gray-900">{exec.name}</span>
+          {exec.role && <span className="text-xs text-gray-500 ml-2">{exec.role}</span>}
+        </div>
+        <span className="text-[11px] text-gray-400">
+          {doneCount}/{tasks.length}
+        </span>
+      </div>
+
+      {tasks.length > 0 && (
+        <ul className="space-y-1 mb-1.5">
+          {tasks.map((t) => (
+            <li key={t.id} className="flex items-center gap-2 text-sm group">
+              <input
+                type="checkbox"
+                checked={t.completed}
+                onChange={() => onToggle(t)}
+                disabled={busy === `toggle-${t.id}`}
+                className="rounded"
+              />
+              <span className={t.completed ? "line-through text-gray-400" : "text-gray-700"}>
+                {t.description}
+              </span>
+              <button
+                onClick={() => onDelete(t.id)}
+                className="ml-auto text-xs text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
+                aria-label="Delete task"
+              >
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <form onSubmit={submit} className="flex gap-2">
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder={`Add a task for ${exec.name.split(" ")[0]}...`}
+          className="input flex-1 text-sm"
+        />
+        <button
+          type="submit"
+          disabled={!input.trim() || busy === `add-${exec.id}`}
+          className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+        >
+          {busy === `add-${exec.id}` ? "..." : "+ Add"}
+        </button>
+      </form>
+    </li>
+  );
+}
+
+/* ───────── Minutes Doc Section ───────── */
+function MinutesDocSection({
+  meeting,
+  onChange,
+}: {
+  meeting: Meeting;
+  onChange: () => void;
+}) {
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  async function regenerate() {
+    if (meeting.minutesDocUrl) {
+      if (
+        !confirm(
+          "Create a brand-new minutes doc? The existing doc will be left where it is in Drive — this dashboard will just point to the new one.",
+        )
+      )
+        return;
+    }
+    setCreating(true);
+    setError(null);
+    const res = await fetch(`/api/meetings/${meeting.id}/minutes`, { method: "POST" });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      setError(data.error || "Failed to create minutes doc.");
+    }
+    setCreating(false);
+    onChange();
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-gray-900">Meeting Minutes Doc</h3>
+        <span
+          className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+            meeting.minutesDocUrl ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"
+          }`}
+        >
+          {meeting.minutesDocUrl ? "ready" : "not created"}
+        </span>
+      </div>
+
+      {meeting.minutesDocUrl ? (
+        <div className="space-y-2">
+          <a
+            href={meeting.minutesDocUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 text-primary-600 hover:underline text-sm font-medium"
+          >
+            📄 Open minutes doc in Google Docs
+          </a>
+          {meeting.minutesDocCreatedAt && (
+            <p className="text-xs text-gray-500">
+              Created {new Date(meeting.minutesDocCreatedAt).toLocaleString()}
+            </p>
+          )}
+          <button
+            onClick={regenerate}
+            disabled={creating}
+            className="text-xs text-gray-500 hover:underline disabled:opacity-50"
+          >
+            {creating ? "Generating..." : "Regenerate (creates a new doc)"}
+          </button>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          <p className="text-sm text-gray-600">
+            No minutes doc yet. Apps Script creates a templated Google Doc in your shared drive,
+            pre-filled with the date, agenda, attendance, and weekly tasks.
+          </p>
+          <button
+            onClick={regenerate}
+            disabled={creating}
+            className="px-3 py-1.5 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 disabled:opacity-50"
+          >
+            {creating ? "Creating..." : "Create minutes doc"}
+          </button>
+        </div>
+      )}
+
+      {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
     </div>
   );
 }

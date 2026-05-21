@@ -1,5 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { createMinutesDoc } from "@/lib/appscript";
+import { getMinutesDocSettings } from "@/lib/settings";
+
+async function tryCreateMinutesDoc(meetingId: number): Promise<void> {
+  // Best-effort: never block meeting creation if Apps Script is down/unconfigured
+  try {
+    if (!process.env.APPS_SCRIPT_URL) return;
+    const meeting = await prisma.meeting.findUnique({ where: { id: meetingId } });
+    if (!meeting) return;
+    const [execs, settings] = await Promise.all([
+      prisma.executive.findMany({
+        where: { active: true },
+        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+      }),
+      getMinutesDocSettings(),
+    ]);
+    const result = await createMinutesDoc({
+      title: meeting.title,
+      date: meeting.date.toISOString(),
+      location: meeting.location,
+      agenda: meeting.agenda,
+      executives: execs.map((e) => ({ name: e.name, role: e.role, tasks: [] })),
+      sharedDriveId: settings.useSharedDrive ? settings.sharedDriveId : null,
+    });
+    if (result.ok && result.docId) {
+      await prisma.meeting.update({
+        where: { id: meetingId },
+        data: {
+          minutesDocId: result.docId,
+          minutesDocUrl: result.docUrl,
+          minutesDocCreatedAt: new Date(),
+        },
+      });
+    }
+  } catch {
+    // swallow — user can regenerate from the meeting page
+  }
+}
 
 export async function GET() {
   const meetings = await prisma.meeting.findMany({
@@ -40,7 +78,9 @@ async function createSingle(data: {
         location: data.location || "Room 137",
       },
     });
-    return NextResponse.json([meeting], { status: 201 });
+    await tryCreateMinutesDoc(meeting.id);
+    const refreshed = await prisma.meeting.findUnique({ where: { id: meeting.id } });
+    return NextResponse.json([refreshed || meeting], { status: 201 });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : "Unknown error";
     return NextResponse.json({ error: msg }, { status: 400 });
@@ -108,6 +148,12 @@ async function createRecurring(data: {
       // Likely a unique-constraint conflict on date — skip silently
       skipped.push(date.toISOString());
     }
+  }
+
+  // Fire-and-forget minutes docs for the bulk-created meetings so we don't
+  // hold the response open for 100+ Apps Script round trips.
+  if (process.env.APPS_SCRIPT_URL && created.length > 0) {
+    Promise.all(created.map((m) => tryCreateMinutesDoc(m.id))).catch(() => {});
   }
 
   return NextResponse.json(
