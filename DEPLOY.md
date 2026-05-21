@@ -72,7 +72,8 @@ So local development keeps working after the SQLite → Postgres switch.
    ```
 
    Open <http://localhost:3000>, log in, click around. (Your old SQLite data
-   doesn't carry over — meetings re-seed automatically; just re-add any execs.)
+   doesn't carry over — the new database starts empty. Create meetings with
+   the **+ New Meeting** button, which can also schedule a recurring series.)
 
 ---
 
