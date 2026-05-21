@@ -61,3 +61,56 @@ export async function sendReminderEmail(
     return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
   }
 }
+
+export interface MinutesDocExecutive {
+  name: string;
+  role: string;
+  tasks: { description: string; completed: boolean }[];
+}
+
+export interface CreateMinutesDocOptions {
+  title: string;
+  date: string;
+  location: string;
+  agenda?: string | null;
+  executives: MinutesDocExecutive[];
+  sharedDriveId?: string | null;
+}
+
+export async function createMinutesDoc(
+  opts: CreateMinutesDocOptions,
+): Promise<{ ok: boolean; error?: string; docId?: string; docUrl?: string }> {
+  const url = process.env.APPS_SCRIPT_URL;
+  if (!url) return { ok: false, error: "Apps Script URL not configured" };
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "createMinutesDoc",
+        title: opts.title,
+        date: opts.date,
+        location: opts.location,
+        agenda: opts.agenda || null,
+        executives: opts.executives,
+        sharedDriveId: opts.sharedDriveId || null,
+      }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      return { ok: false, error: `Apps Script returned ${res.status}: ${text}` };
+    }
+
+    const data = await res.json();
+    return {
+      ok: !!data.ok,
+      error: data.error,
+      docId: data.docId,
+      docUrl: data.docUrl,
+    };
+  } catch (err: unknown) {
+    return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}

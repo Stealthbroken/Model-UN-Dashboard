@@ -8,19 +8,23 @@ datasource db {
 }
 
 model Meeting {
-  id               Int       @id @default(autoincrement())
-  date             DateTime  @unique
-  title            String    @default("Weekly MUN Meeting")
-  location         String    @default("Room 137")
-  agenda           String?
-  notes            String?
-  responsibleEmail String?
-  reminderSentAt   DateTime?
-  archivedAt       DateTime?
-  createdAt        DateTime  @default(now())
+  id                   Int       @id @default(autoincrement())
+  date                 DateTime  @unique
+  title                String    @default("Weekly MUN Meeting")
+  location             String    @default("Room 137")
+  agenda               String?
+  notes                String?
+  responsibleEmail     String?
+  reminderSentAt       DateTime?
+  archivedAt           DateTime?
+  minutesDocId         String?
+  minutesDocUrl        String?
+  minutesDocCreatedAt  DateTime?
+  createdAt            DateTime  @default(now())
 
   topicGuide   TopicGuide?
   announcement ClassroomAnnouncement?
+  tasks        Task[]
 }
 
 model TopicGuide {
@@ -50,4 +54,38 @@ model InstagramPost {
   status    String    @default("draft")
   postedAt  DateTime?
   createdAt DateTime  @default(now())
+}
+
+model Executive {
+  id        Int      @id @default(autoincrement())
+  name      String
+  role      String   @default("")
+  email     String?
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  tasks Task[]
+}
+
+model Setting {
+  key   String @id
+  value String
+}
+
+model Task {
+  id           Int       @id @default(autoincrement())
+  description  String
+  completed    Boolean   @default(false)
+  completedAt  DateTime?
+  sortOrder    Int       @default(0)
+  meetingId    Int
+  executiveId  Int
+  createdAt    DateTime  @default(now())
+
+  meeting   Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  executive Executive @relation(fields: [executiveId], references: [id], onDelete: Cascade)
+
+  @@index([meetingId])
+  @@index([executiveId])
 }

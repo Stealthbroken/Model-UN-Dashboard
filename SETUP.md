@@ -19,7 +19,8 @@ Copy `.env.example` to `.env.local` and fill in:
 | Variable | Required | Description |
 |---|---|---|
 | `SESSION_PASSWORD` | Yes | Password for the dashboard login |
-| `APPS_SCRIPT_URL` | For Classroom | Your deployed Apps Script web app URL |
+| `SECGEN_PASSWORD` | Optional | Separate password that unlocks the Sec-Gen panel (`/executives`). If unset, that panel cannot be unlocked. |
+| `APPS_SCRIPT_URL` | For Classroom + Minutes | Your deployed Apps Script web app URL |
 | `CLASSROOM_COURSE_ID` | For Classroom | The Google Classroom course ID |
 | `INSTAGRAM_ACCESS_TOKEN` | For auto-post | Meta Graph API long-lived token |
 | `INSTAGRAM_USER_ID` | For auto-post | Your Instagram Business account user ID |
@@ -46,6 +47,20 @@ This uses Google Apps Script so the announcement posts using your school account
 7. Copy the **Web App URL** — paste it into `.env.local` as `APPS_SCRIPT_URL`
 8. Get your **Course ID**: open Google Classroom, go to your class, the ID is in the URL: `https://classroom.google.com/c/COURSE_ID_HERE`
 9. Paste the Course ID into `.env.local` as `CLASSROOM_COURSE_ID`
+
+### Meeting Minutes Docs (Apps Script)
+
+When a meeting is created, the dashboard calls Apps Script to generate a templated Google Doc in your shared drive, pre-filled with date, time, location, attendance table, agenda, weekly tasks per executive, and an action-items table. A link to the doc appears on the meeting page.
+
+To configure:
+
+1. In the dashboard, open the **Sec-Gen Panel** (sidebar → 👥 Sec-Gen Panel), unlock with `SECGEN_PASSWORD`
+2. In the **Meeting Minutes Doc** card:
+   - Toggle **Use a Shared Drive** on
+   - Paste your **Shared Drive ID** (the part of the URL after `drive.google.com/drive/folders/`)
+3. In your Apps Script project, make sure **Drive API** (the advanced service) is enabled, then redeploy
+
+If the toggle is off — or the shared drive ID is blank — the doc falls back to the script owner's personal Drive. If Apps Script is unreachable when a meeting is created, the meeting is still saved; you can click "Create minutes doc" on the meeting page to retry.
 
 ### How It Works
 
