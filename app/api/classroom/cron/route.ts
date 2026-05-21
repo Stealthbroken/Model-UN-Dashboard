@@ -13,7 +13,8 @@ export async function POST() {
     },
     include: {
       meeting: {
-        include: { topicGuide: true },
+        // Only the path/filename are needed to build the attachment URL.
+        include: { topicGuide: { select: { filename: true, path: true } } },
       },
     },
   });

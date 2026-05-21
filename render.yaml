@@ -1,0 +1,32 @@
+# Render Blueprint — lets you deploy the whole app by pointing Render at this
+# repo (New + → Blueprint). See DEPLOY.md for the full walkthrough.
+services:
+  - type: web
+    name: mun-dashboard
+    runtime: node
+    plan: free
+    # Free regions: oregon, ohio, virginia, frankfurt, singapore.
+    # Pick the one nearest your Neon database region for lowest latency.
+    region: oregon
+    branch: main
+    buildCommand: npm install && npx prisma db push && npm run build
+    startCommand: npm run start
+    healthCheckPath: /login
+    envVars:
+      # Paste values for these in the Render dashboard when prompted.
+      - key: DATABASE_URL
+        sync: false
+      - key: SESSION_PASSWORD
+        sync: false
+      - key: SECGEN_PASSWORD
+        sync: false
+      - key: NEXT_PUBLIC_BASE_URL
+        sync: false
+      - key: APPS_SCRIPT_URL
+        sync: false
+      - key: CLASSROOM_COURSE_ID
+        sync: false
+      - key: INSTAGRAM_ACCESS_TOKEN
+        sync: false
+      - key: INSTAGRAM_USER_ID
+        sync: false

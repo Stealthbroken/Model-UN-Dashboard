@@ -11,7 +11,8 @@ export default async function MeetingPage({ params }: { params: { id: string } }
   const meeting = await prisma.meeting.findUnique({
     where: { id },
     include: {
-      topicGuide: true,
+      // Exclude the PDF blob — it's served separately via its API route.
+      topicGuide: { select: { id: true, filename: true, path: true } },
       announcement: true,
       tasks: { orderBy: { sortOrder: "asc" } },
     },

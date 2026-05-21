@@ -3,8 +3,8 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = "file:../mun.db"
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 model Meeting {
@@ -31,6 +31,8 @@ model TopicGuide {
   id         Int      @id @default(autoincrement())
   filename   String
   path       String
+  mimeType   String   @default("application/pdf")
+  data       Bytes
   meetingId  Int      @unique
   meeting    Meeting  @relation(fields: [meetingId], references: [id], onDelete: Cascade)
   uploadedAt DateTime @default(now())
@@ -48,12 +50,14 @@ model ClassroomAnnouncement {
 }
 
 model InstagramPost {
-  id        Int       @id @default(autoincrement())
-  caption   String
-  imagePath String?
-  status    String    @default("draft")
-  postedAt  DateTime?
-  createdAt DateTime  @default(now())
+  id            Int       @id @default(autoincrement())
+  caption       String
+  imagePath     String?
+  imageData     Bytes?
+  imageMimeType String?
+  status        String    @default("draft")
+  postedAt      DateTime?
+  createdAt     DateTime  @default(now())
 }
 
 model Executive {

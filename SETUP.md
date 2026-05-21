@@ -2,13 +2,19 @@
 
 ## Quick Start
 
+The app uses **Postgres**. Get a free database from [Neon](https://neon.tech)
+(see [DEPLOY.md](DEPLOY.md) Step 1), then:
+
 ```bash
 npm install
+# put your Neon connection string in .env.local as DATABASE_URL first
 npx prisma db push
 npm run dev
 ```
 
 Open http://localhost:3000 and log in with the password set in `.env.local`.
+
+To put the app online for free, see **[DEPLOY.md](DEPLOY.md)**.
 
 ---
 
@@ -18,8 +24,10 @@ Copy `.env.example` to `.env.local` and fill in:
 
 | Variable | Required | Description |
 |---|---|---|
+| `DATABASE_URL` | Yes | Postgres connection string (free one from Neon — see DEPLOY.md) |
 | `SESSION_PASSWORD` | Yes | Password for the dashboard login |
 | `SECGEN_PASSWORD` | Optional | Separate password that unlocks the Sec-Gen panel (`/executives`). If unset, that panel cannot be unlocked. |
+| `NEXT_PUBLIC_BASE_URL` | For Classroom + Instagram | Public URL of the app (`http://localhost:3000` locally) |
 | `APPS_SCRIPT_URL` | For Classroom + Minutes | Your deployed Apps Script web app URL |
 | `CLASSROOM_COURSE_ID` | For Classroom | The Google Classroom course ID |
 | `INSTAGRAM_ACCESS_TOKEN` | For auto-post | Meta Graph API long-lived token |

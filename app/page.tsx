@@ -10,7 +10,8 @@ export default async function DashboardPage() {
     where: { date: { gte: now }, archivedAt: null },
     orderBy: { date: "asc" },
     include: {
-      topicGuide: true,
+      // Only need existence — never pull the PDF blob into a list view.
+      topicGuide: { select: { id: true } },
       announcement: true,
     },
   });

@@ -4,6 +4,8 @@ const next = require("next");
 const cron = require("node-cron");
 
 const dev = process.env.NODE_ENV !== "production";
+// Hosts (Render, Railway, etc.) inject the port to bind to via $PORT.
+const port = parseInt(process.env.PORT || "3000", 10);
 const app = next({ dev });
 const handle = app.getRequestHandler();
 
@@ -11,13 +13,13 @@ app.prepare().then(() => {
   createServer((req, res) => {
     const parsedUrl = parse(req.url, true);
     handle(req, res, parsedUrl);
-  }).listen(3000, () => {
-    console.log("> MUN Dashboard ready on http://localhost:3000");
+  }).listen(port, () => {
+    console.log(`> MUN Dashboard ready on port ${port}`);
   });
 
   async function runCron(path, label) {
     try {
-      const res = await fetch(`http://localhost:3000${path}`, { method: "POST" });
+      const res = await fetch(`http://localhost:${port}${path}`, { method: "POST" });
       if (!res.ok) console.error(`Cron: ${label} failed`, res.status);
     } catch {
       // Server may not be ready yet
