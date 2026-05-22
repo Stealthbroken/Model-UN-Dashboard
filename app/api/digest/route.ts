@@ -1,27 +1,16 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { sendReminderEmail } from "@/lib/appscript";
+import { getSession } from "@/lib/session";
 
 /**
- * Weekly digest: emails each executive their open tasks plus the next meeting.
- * Scheduled from server.js (Mondays); idempotency guard prevents double-sends.
- * Pass ?force=true to send immediately regardless of the guard (for testing).
+ * Weekly digest — emails each executive their open tasks plus the next meeting.
+ * Manually triggered from the Sec-Gen panel (sec-gen access required).
  */
-export async function POST(request: NextRequest) {
-  const force = request.nextUrl.searchParams.get("force") === "true";
-  const DIGEST_KEY = "lastDigestSentAt";
-
-  if (!force) {
-    const last = await prisma.setting.findUnique({ where: { key: DIGEST_KEY } });
-    if (last) {
-      const daysSince = (Date.now() - new Date(last.value).getTime()) / 86_400_000;
-      if (daysSince < 6) {
-        return NextResponse.json({
-          skipped: true,
-          reason: "Digest already sent within the last 6 days",
-        });
-      }
-    }
+export async function POST() {
+  const session = await getSession();
+  if (!session.isSecgen) {
+    return NextResponse.json({ error: "Sec-Gen access required" }, { status: 403 });
   }
 
   const now = new Date();
@@ -44,6 +33,14 @@ export async function POST(request: NextRequest) {
     }),
   ]);
 
+  if (execs.length === 0) {
+    return NextResponse.json({
+      sent: 0,
+      results: [],
+      message: "No active executives have an email address set.",
+    });
+  }
+
   const results: { exec: string; ok: boolean; error?: string }[] = [];
 
   for (const exec of execs) {
@@ -57,13 +54,12 @@ export async function POST(request: NextRequest) {
     results.push({ exec: exec.name, ok: result.ok, error: result.error });
   }
 
-  await prisma.setting.upsert({
-    where: { key: DIGEST_KEY },
-    create: { key: DIGEST_KEY, value: now.toISOString() },
-    update: { value: now.toISOString() },
+  const failures = results.filter((r) => !r.ok);
+  return NextResponse.json({
+    sent: results.filter((r) => r.ok).length,
+    failed: failures.length,
+    results,
   });
-
-  return NextResponse.json({ sent: results.length, results });
 }
 
 interface DigestTask {
@@ -87,13 +83,11 @@ function composeDigest(
 
   let taskHtml: string;
   if (tasks.length === 0) {
-    taskHtml = "<p>You have no open tasks. Nicely done! 🎉</p>";
+    taskHtml = "<p>You have no open tasks. Nicely done!</p>";
   } else {
     const items = tasks
       .map((t) => {
-        const due = t.dueDate
-          ? ` — <em>due ${fmtDate(t.dueDate)}</em>`
-          : "";
+        const due = t.dueDate ? ` — <em>due ${fmtDate(t.dueDate)}</em>` : "";
         const overdue =
           t.dueDate && new Date(t.dueDate) < new Date()
             ? ' <strong style="color:#c0392b">(overdue)</strong>'
@@ -119,7 +113,7 @@ function composeDigest(
   return `
     <div style="font-family:Arial,sans-serif;font-size:14px;color:#222">
       <p>Hi ${escapeHtml(name)},</p>
-      <p>Here's your weekly MUN digest.</p>
+      <p>Here's your MUN digest.</p>
       ${taskHtml}
       ${meetingHtml}
       <p style="color:#888;font-size:12px">— MUN Dashboard</p>

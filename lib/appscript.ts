@@ -62,23 +62,32 @@ export async function sendReminderEmail(
   }
 }
 
+export interface MinutesDocTask {
+  description: string;
+  completed: boolean;
+  priority: string;
+  dueDate: string | null;
+  label: string | null;
+}
+
 export interface MinutesDocExecutive {
   name: string;
   role: string;
-  tasks: { description: string; completed: boolean }[];
+  present: boolean;
+  tasks: MinutesDocTask[];
 }
 
-export interface CreateMinutesDocOptions {
+/** The full snapshot rendered into a minutes Doc — shared by create + update. */
+export interface MinutesDocData {
   title: string;
   date: string;
   location: string;
   agenda?: string | null;
   executives: MinutesDocExecutive[];
-  sharedDriveId?: string | null;
 }
 
 export async function createMinutesDoc(
-  opts: CreateMinutesDocOptions,
+  data: MinutesDocData & { sharedDriveId?: string | null },
 ): Promise<{ ok: boolean; error?: string; docId?: string; docUrl?: string }> {
   const url = process.env.APPS_SCRIPT_URL;
   if (!url) return { ok: false, error: "Apps Script URL not configured" };
@@ -89,12 +98,12 @@ export async function createMinutesDoc(
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "createMinutesDoc",
-        title: opts.title,
-        date: opts.date,
-        location: opts.location,
-        agenda: opts.agenda || null,
-        executives: opts.executives,
-        sharedDriveId: opts.sharedDriveId || null,
+        title: data.title,
+        date: data.date,
+        location: data.location,
+        agenda: data.agenda || null,
+        executives: data.executives,
+        sharedDriveId: data.sharedDriveId || null,
       }),
     });
 
@@ -103,12 +112,12 @@ export async function createMinutesDoc(
       return { ok: false, error: `Apps Script returned ${res.status}: ${text}` };
     }
 
-    const data = await res.json();
+    const json = await res.json();
     return {
-      ok: !!data.ok,
-      error: data.error,
-      docId: data.docId,
-      docUrl: data.docUrl,
+      ok: !!json.ok,
+      error: json.error,
+      docId: json.docId,
+      docUrl: json.docUrl,
     };
   } catch (err: unknown) {
     return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
@@ -116,12 +125,12 @@ export async function createMinutesDoc(
 }
 
 /**
- * Rewrites just the "Weekly Tasks" section of an existing minutes Doc — used
- * to keep the doc in sync as tasks are added/checked off in the dashboard.
+ * Re-syncs the managed region of an existing minutes Doc (header, attendance,
+ * agenda, weekly tasks) — the human-written Discussion Notes are left intact.
  */
 export async function updateMinutesDoc(
   docId: string,
-  executives: MinutesDocExecutive[],
+  data: MinutesDocData,
 ): Promise<{ ok: boolean; error?: string }> {
   const url = process.env.APPS_SCRIPT_URL;
   if (!url) return { ok: false, error: "Apps Script URL not configured" };
@@ -130,11 +139,19 @@ export async function updateMinutesDoc(
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "updateMinutesDoc", docId, executives }),
+      body: JSON.stringify({
+        action: "updateMinutesDoc",
+        docId,
+        title: data.title,
+        date: data.date,
+        location: data.location,
+        agenda: data.agenda || null,
+        executives: data.executives,
+      }),
     });
     if (!res.ok) return { ok: false, error: `Apps Script returned ${res.status}` };
-    const data = await res.json();
-    return { ok: !!data.ok, error: data.error };
+    const json = await res.json();
+    return { ok: !!json.ok, error: json.error };
   } catch (err: unknown) {
     return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
   }
