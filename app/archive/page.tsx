@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import Link from "next/link";
+import { fmtDateLong } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +59,7 @@ export default async function ArchivePage({
                 <div>
                   <div className="flex items-center gap-2 flex-wrap">
                     <h2 className="font-semibold text-gray-900">
-                      {m.date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+                      {fmtDateLong(m.date)}
                     </h2>
                     <span
                       className={`text-[10px] uppercase font-semibold tracking-wide px-1.5 py-0.5 rounded ${

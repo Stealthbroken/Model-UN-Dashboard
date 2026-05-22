@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 export const SETTING_KEYS = {
   useSharedDrive: "useSharedDrive",
   sharedDriveId: "sharedDriveId",
+  discordWebhookUrl: "discordWebhookUrl",
 } as const;
 
 export interface MinutesDocSettings {
@@ -39,4 +40,23 @@ export async function setMinutesDocSettings(
     });
   }
   return getMinutesDocSettings();
+}
+
+/* ───────── Discord webhook ───────── */
+
+export async function getDiscordWebhookUrl(): Promise<string> {
+  const row = await prisma.setting.findUnique({
+    where: { key: SETTING_KEYS.discordWebhookUrl },
+  });
+  return row?.value || "";
+}
+
+export async function setDiscordWebhookUrl(url: string): Promise<string> {
+  const value = url.trim();
+  await prisma.setting.upsert({
+    where: { key: SETTING_KEYS.discordWebhookUrl },
+    create: { key: SETTING_KEYS.discordWebhookUrl, value },
+    update: { value },
+  });
+  return value;
 }

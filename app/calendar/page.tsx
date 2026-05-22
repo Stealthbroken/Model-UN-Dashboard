@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import Link from "next/link";
+import { fmtTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -147,11 +148,7 @@ export default async function CalendarPage({
                           } ${m.archivedAt ? "opacity-50" : ""}`}
                           title={m.title}
                         >
-                          {new Date(m.date).toLocaleTimeString("en-US", {
-                            hour: "numeric",
-                            minute: "2-digit",
-                          })}{" "}
-                          {m.title}
+                          {fmtTime(m.date)} {m.title}
                         </Link>
                       ))}
                     </div>

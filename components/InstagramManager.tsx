@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { fmtDate, fmtDateTime } from "@/lib/format";
 
 interface InstagramPost {
   id: number;
@@ -274,8 +275,8 @@ function PostCard({
           </span>
           <span className="text-xs text-gray-400">
             {post.postedAt
-              ? `Posted ${new Date(post.postedAt).toLocaleString()}`
-              : `Created ${new Date(post.createdAt).toLocaleDateString()}`}
+              ? `Posted ${fmtDateTime(post.postedAt)}`
+              : `Created ${fmtDate(post.createdAt)}`}
           </span>
         </div>
         <p className="text-sm text-gray-700 line-clamp-3 whitespace-pre-wrap">{post.caption}</p>

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { sendReminderEmail } from "@/lib/appscript";
 import { getSession } from "@/lib/session";
+import { fmtDate } from "@/lib/format";
 
 /**
  * Weekly digest — emails each executive their open tasks plus the next meeting.
@@ -74,13 +75,6 @@ function composeDigest(
   tasks: DigestTask[],
   nextMeeting: { title: string; date: Date; location: string; agenda: string | null } | null,
 ): string {
-  const fmtDate = (d: Date) =>
-    new Date(d).toLocaleDateString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-    });
-
   let taskHtml: string;
   if (tasks.length === 0) {
     taskHtml = "<p>You have no open tasks. Nicely done!</p>";

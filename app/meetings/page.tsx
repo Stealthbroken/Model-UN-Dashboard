@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { MeetingCreator } from "@/components/MeetingCreator";
+import { fmtDateLong, fmtTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -83,18 +84,10 @@ export default async function MeetingsPage({
                     </span>
                   </div>
                   <h2 className="text-lg font-semibold text-gray-900">
-                    {m.date.toLocaleDateString("en-US", {
-                      weekday: "long",
-                      month: "long",
-                      day: "numeric",
-                    })}
+                    {fmtDateLong(m.date)}
                   </h2>
                   <p className="text-sm text-gray-500 mt-0.5">
-                    {m.date.toLocaleTimeString("en-US", {
-                      hour: "numeric",
-                      minute: "2-digit",
-                    })}{" "}
-                    • {m.location}
+                    {fmtTime(m.date)} • {m.location}
                   </p>
                 </div>
 
