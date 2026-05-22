@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { syncMinutesDoc } from "@/lib/minutes-sync";
 
 export async function PATCH(
   request: NextRequest,
@@ -38,6 +39,8 @@ export async function PATCH(
     },
   });
 
+  // Title / date / agenda live in the minutes doc — keep it in sync.
+  void syncMinutesDoc(id);
   return NextResponse.json(meeting);
 }
 

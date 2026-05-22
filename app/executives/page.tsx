@@ -3,6 +3,7 @@ import { ExecutivesManager } from "@/components/ExecutivesManager";
 import { SecgenLock } from "@/components/SecgenLock";
 import { SecgenLockButton } from "@/components/SecgenLockButton";
 import { MinutesDocSettings } from "@/components/MinutesDocSettings";
+import { DigestPanel } from "@/components/DigestPanel";
 import { getSession, secgenPassword } from "@/lib/session";
 import { getMinutesDocSettings } from "@/lib/settings";
 
@@ -37,6 +38,7 @@ export default async function ExecutivesPage() {
 
       <div className="space-y-6">
         <MinutesDocSettings initial={JSON.parse(JSON.stringify(settings))} />
+        <DigestPanel />
         <ExecutivesManager initial={JSON.parse(JSON.stringify(execs))} />
       </div>
     </div>

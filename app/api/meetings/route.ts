@@ -2,28 +2,25 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { createMinutesDoc } from "@/lib/appscript";
 import { getMinutesDocSettings } from "@/lib/settings";
+import { buildMinutesPayload } from "@/lib/minutes-sync";
 
 async function tryCreateMinutesDoc(meetingId: number): Promise<void> {
   // Best-effort: never block meeting creation if Apps Script is down/unconfigured
   try {
     if (!process.env.APPS_SCRIPT_URL) return;
-    const meeting = await prisma.meeting.findUnique({ where: { id: meetingId } });
-    if (!meeting) return;
+    const meeting = await prisma.meeting.findUnique({
+      where: { id: meetingId },
+      select: { type: true },
+    });
     // Minutes docs are an exec-meeting feature only.
-    if (meeting.type !== "exec") return;
-    const [execs, settings] = await Promise.all([
-      prisma.executive.findMany({
-        where: { active: true },
-        orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-      }),
+    if (!meeting || meeting.type !== "exec") return;
+    const [payload, settings] = await Promise.all([
+      buildMinutesPayload(meetingId),
       getMinutesDocSettings(),
     ]);
+    if (!payload) return;
     const result = await createMinutesDoc({
-      title: meeting.title,
-      date: meeting.date.toISOString(),
-      location: meeting.location,
-      agenda: meeting.agenda,
-      executives: execs.map((e) => ({ name: e.name, role: e.role, tasks: [] })),
+      ...payload,
       sharedDriveId: settings.useSharedDrive ? settings.sharedDriveId : null,
     });
     if (result.ok && result.docId) {
