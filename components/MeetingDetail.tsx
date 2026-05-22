@@ -24,6 +24,9 @@ interface Task {
   description: string;
   completed: boolean;
   completedAt: string | null;
+  dueDate: string | null;
+  priority: string;
+  label: string | null;
   sortOrder: number;
   meetingId: number;
   executiveId: number;
@@ -38,11 +41,19 @@ interface Executive {
   sortOrder: number;
 }
 
+interface MeetingAttendance {
+  id: number;
+  present: boolean;
+  meetingId: number;
+  executiveId: number;
+}
+
 interface Meeting {
   id: number;
   date: string;
   title: string;
   location: string;
+  type: string;
   agenda: string | null;
   notes: string | null;
   responsibleEmail: string | null;
@@ -53,6 +64,7 @@ interface Meeting {
   topicGuide: TopicGuide | null;
   announcement: ClassroomAnnouncement | null;
   tasks: Task[];
+  attendance: MeetingAttendance[];
 }
 
 function toLocalInputValue(date: Date): string {
@@ -67,6 +79,39 @@ function defaultAnnouncementTime(meetingDate: Date): string {
   return toLocalInputValue(d);
 }
 
+interface NewTaskInput {
+  description: string;
+  priority: string;
+  dueDate: string;
+  label: string;
+}
+
+const PRIORITY_STYLES: Record<string, { dot: string; label: string }> = {
+  high: { dot: "bg-red-500", label: "High" },
+  medium: { dot: "bg-amber-400", label: "Medium" },
+  low: { dot: "bg-gray-300", label: "Low" },
+};
+
+function dueDateInfo(
+  dueDate: string | null,
+  completed: boolean,
+): { text: string; overdue: boolean } | null {
+  if (!dueDate) return null;
+  const d = new Date(dueDate);
+  const overdue = !completed && d < new Date();
+  return {
+    text: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+    overdue,
+  };
+}
+
+function toDateInputValue(iso: string | null): string {
+  if (!iso) return "";
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 export function MeetingDetail({
   meeting,
   executives,
@@ -78,46 +123,127 @@ export function MeetingDetail({
 }) {
   const router = useRouter();
   const meetingDate = new Date(meeting.date);
+  const isExec = meeting.type === "exec";
 
   return (
     <div className="max-w-5xl">
       {/* Breadcrumb */}
-      <Link href="/" className="text-sm text-gray-500 hover:text-gray-700 mb-4 inline-block">
+      <Link href="/meetings" className="text-sm text-gray-500 hover:text-gray-700 mb-4 inline-block">
         ← All meetings
       </Link>
 
       {/* Meeting Header */}
       <MeetingHeader meeting={meeting} onUpdate={() => router.refresh()} />
 
-      {/* Executives & Tasks */}
-      <div className="mt-6">
-        <ExecutivesTasksSection
-          meeting={meeting}
-          executives={executives}
-          previousUnfinishedCount={previousUnfinishedCount}
-          onChange={() => router.refresh()}
-        />
-      </div>
+      {isExec ? (
+        <>
+          {/* Attendance */}
+          <div className="mt-6">
+            <AttendanceSection
+              meeting={meeting}
+              executives={executives}
+              onChange={() => router.refresh()}
+            />
+          </div>
 
-      {/* Minutes Doc */}
-      <div className="mt-6">
-        <MinutesDocSection meeting={meeting} onChange={() => router.refresh()} />
-      </div>
+          {/* Executives & Tasks */}
+          <div className="mt-6">
+            <ExecutivesTasksSection
+              meeting={meeting}
+              executives={executives}
+              previousUnfinishedCount={previousUnfinishedCount}
+              onChange={() => router.refresh()}
+            />
+          </div>
 
-      {/* Two Subsections (Instagram now lives in its own tab) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-        <TopicGuideSection
-          meetingId={meeting.id}
-          guide={meeting.topicGuide}
-          onChange={() => router.refresh()}
-        />
-        <ClassroomSection
-          meetingId={meeting.id}
-          announcement={meeting.announcement}
-          defaultTime={defaultAnnouncementTime(meetingDate)}
-          onChange={() => router.refresh()}
-        />
+          {/* Minutes Doc */}
+          <div className="mt-6">
+            <MinutesDocSection meeting={meeting} onChange={() => router.refresh()} />
+          </div>
+        </>
+      ) : (
+        /* Regular meeting: Topic Guide + Classroom Announcement */
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
+          <TopicGuideSection
+            meetingId={meeting.id}
+            guide={meeting.topicGuide}
+            onChange={() => router.refresh()}
+          />
+          <ClassroomSection
+            meetingId={meeting.id}
+            announcement={meeting.announcement}
+            defaultTime={defaultAnnouncementTime(meetingDate)}
+            onChange={() => router.refresh()}
+          />
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ───────── Attendance Section ───────── */
+function AttendanceSection({
+  meeting,
+  executives,
+  onChange,
+}: {
+  meeting: Meeting;
+  executives: Executive[];
+  onChange: () => void;
+}) {
+  const [busy, setBusy] = useState<number | null>(null);
+
+  const presentMap = new Map<number, boolean>();
+  for (const a of meeting.attendance) presentMap.set(a.executiveId, a.present);
+  const presentCount = executives.filter((e) => presentMap.get(e.id)).length;
+
+  async function toggle(executiveId: number, present: boolean) {
+    setBusy(executiveId);
+    await fetch(`/api/meetings/${meeting.id}/attendance`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ executiveId, present }),
+    });
+    setBusy(null);
+    onChange();
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+      <div className="flex items-center justify-between mb-3">
+        <h3 className="font-semibold text-gray-900">Attendance</h3>
+        <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
+          {presentCount}/{executives.length} present
+        </span>
       </div>
+      {executives.length === 0 ? (
+        <p className="text-sm text-gray-400">No executives on the roster.</p>
+      ) : (
+        <ul className="divide-y divide-gray-100">
+          {executives.map((e) => {
+            const present = !!presentMap.get(e.id);
+            return (
+              <li key={e.id} className="flex items-center gap-3 py-2">
+                <span className="flex-1 text-sm text-gray-800">
+                  {e.name}
+                  {e.role && <span className="text-xs text-gray-400 ml-2">{e.role}</span>}
+                </span>
+                <button
+                  onClick={() => toggle(e.id, !present)}
+                  disabled={busy === e.id}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 ${
+                    present
+                      ? "bg-green-50 border-green-300 text-green-700"
+                      : "bg-gray-50 border-gray-300 text-gray-500"
+                  }`}
+                >
+                  {present ? "✓ Present" : "Absent"}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
     </div>
   );
 }
@@ -161,13 +287,31 @@ function ExecutivesTasksSection({
     onChange();
   }
 
-  async function addTask(executiveId: number, description: string) {
-    if (!description.trim()) return;
+  async function addTask(executiveId: number, payload: NewTaskInput) {
+    if (!payload.description.trim()) return;
     setBusy(`add-${executiveId}`);
     await fetch("/api/tasks", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ meetingId: meeting.id, executiveId, description }),
+      body: JSON.stringify({
+        meetingId: meeting.id,
+        executiveId,
+        description: payload.description,
+        priority: payload.priority,
+        dueDate: payload.dueDate || null,
+        label: payload.label || null,
+      }),
+    });
+    setBusy(null);
+    onChange();
+  }
+
+  async function editTask(taskId: number, patch: Record<string, unknown>) {
+    setBusy(`edit-${taskId}`);
+    await fetch(`/api/tasks/${taskId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(patch),
     });
     setBusy(null);
     onChange();
@@ -247,6 +391,7 @@ function ExecutivesTasksSection({
               busy={busy}
               onToggle={toggleTask}
               onAdd={addTask}
+              onEdit={editTask}
               onDelete={deleteTask}
             />
           ))}
@@ -291,23 +436,31 @@ function ExecutiveTaskRow({
   busy,
   onToggle,
   onAdd,
+  onEdit,
   onDelete,
 }: {
   exec: Executive;
   tasks: Task[];
   busy: string | null;
   onToggle: (t: Task) => void;
-  onAdd: (executiveId: number, description: string) => void;
+  onAdd: (executiveId: number, payload: NewTaskInput) => void;
+  onEdit: (taskId: number, patch: Record<string, unknown>) => void;
   onDelete: (id: number) => void;
 }) {
-  const [input, setInput] = useState("");
+  const [desc, setDesc] = useState("");
+  const [priority, setPriority] = useState("medium");
+  const [dueDate, setDueDate] = useState("");
+  const [label, setLabel] = useState("");
   const doneCount = tasks.filter((t) => t.completed).length;
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
-    if (!input.trim()) return;
-    onAdd(exec.id, input);
-    setInput("");
+    if (!desc.trim()) return;
+    onAdd(exec.id, { description: desc, priority, dueDate, label });
+    setDesc("");
+    setPriority("medium");
+    setDueDate("");
+    setLabel("");
   }
 
   return (
@@ -323,46 +476,185 @@ function ExecutiveTaskRow({
       </div>
 
       {tasks.length > 0 && (
-        <ul className="space-y-1 mb-1.5">
+        <ul className="space-y-1 mb-2">
           {tasks.map((t) => (
-            <li key={t.id} className="flex items-center gap-2 text-sm group">
-              <input
-                type="checkbox"
-                checked={t.completed}
-                onChange={() => onToggle(t)}
-                disabled={busy === `toggle-${t.id}`}
-                className="rounded"
-              />
-              <span className={t.completed ? "line-through text-gray-400" : "text-gray-700"}>
-                {t.description}
-              </span>
-              <button
-                onClick={() => onDelete(t.id)}
-                className="ml-auto text-xs text-red-400 hover:text-red-600 opacity-0 group-hover:opacity-100 transition-opacity"
-                aria-label="Delete task"
-              >
-                ✕
-              </button>
-            </li>
+            <TaskItem
+              key={t.id}
+              task={t}
+              busy={busy}
+              onToggle={onToggle}
+              onEdit={onEdit}
+              onDelete={onDelete}
+            />
           ))}
         </ul>
       )}
 
-      <form onSubmit={submit} className="flex gap-2">
+      <form onSubmit={submit} className="flex flex-wrap gap-2 items-center">
         <input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
+          value={desc}
+          onChange={(e) => setDesc(e.target.value)}
           placeholder={`Add a task for ${exec.name.split(" ")[0]}...`}
-          className="input flex-1 text-sm"
+          className="input flex-1 min-w-[10rem] text-sm"
+        />
+        <select
+          value={priority}
+          onChange={(e) => setPriority(e.target.value)}
+          className="input text-sm !w-auto"
+          title="Priority"
+        >
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <input
+          type="date"
+          value={dueDate}
+          onChange={(e) => setDueDate(e.target.value)}
+          className="input text-sm !w-auto"
+          title="Due date (optional)"
+        />
+        <input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Label"
+          className="input text-sm !w-24"
+          title="Category label (optional)"
         />
         <button
           type="submit"
-          disabled={!input.trim() || busy === `add-${exec.id}`}
+          disabled={!desc.trim() || busy === `add-${exec.id}`}
           className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
         >
           {busy === `add-${exec.id}` ? "..." : "+ Add"}
         </button>
       </form>
+    </li>
+  );
+}
+
+function TaskItem({
+  task,
+  busy,
+  onToggle,
+  onEdit,
+  onDelete,
+}: {
+  task: Task;
+  busy: string | null;
+  onToggle: (t: Task) => void;
+  onEdit: (taskId: number, patch: Record<string, unknown>) => void;
+  onDelete: (id: number) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [desc, setDesc] = useState(task.description);
+  const [priority, setPriority] = useState(task.priority);
+  const [dueDate, setDueDate] = useState(toDateInputValue(task.dueDate));
+  const [label, setLabel] = useState(task.label || "");
+
+  const pri = PRIORITY_STYLES[task.priority] || PRIORITY_STYLES.medium;
+  const due = dueDateInfo(task.dueDate, task.completed);
+
+  function save() {
+    if (!desc.trim()) return;
+    onEdit(task.id, {
+      description: desc,
+      priority,
+      dueDate: dueDate || null,
+      label: label || null,
+    });
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <li className="py-1.5 flex flex-wrap gap-2 items-center">
+        <input
+          value={desc}
+          onChange={(e) => setDesc(e.target.value)}
+          className="input flex-1 min-w-[10rem] text-sm"
+        />
+        <select
+          value={priority}
+          onChange={(e) => setPriority(e.target.value)}
+          className="input text-sm !w-auto"
+        >
+          <option value="high">High</option>
+          <option value="medium">Medium</option>
+          <option value="low">Low</option>
+        </select>
+        <input
+          type="date"
+          value={dueDate}
+          onChange={(e) => setDueDate(e.target.value)}
+          className="input text-sm !w-auto"
+        />
+        <input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          placeholder="Label"
+          className="input text-sm !w-24"
+        />
+        <button onClick={save} className="text-xs text-primary-600 hover:underline">
+          Save
+        </button>
+        <button
+          onClick={() => setEditing(false)}
+          className="text-xs text-gray-500 hover:underline"
+        >
+          Cancel
+        </button>
+      </li>
+    );
+  }
+
+  return (
+    <li className="flex items-center gap-2 text-sm group">
+      <input
+        type="checkbox"
+        checked={task.completed}
+        onChange={() => onToggle(task)}
+        disabled={busy === `toggle-${task.id}`}
+        className="rounded"
+      />
+      <span
+        className={`w-2 h-2 rounded-full shrink-0 ${pri.dot}`}
+        title={`${pri.label} priority`}
+      />
+      <span className={task.completed ? "line-through text-gray-400" : "text-gray-700"}>
+        {task.description}
+      </span>
+      {task.label && (
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 shrink-0">
+          {task.label}
+        </span>
+      )}
+      {due && (
+        <span
+          className={`text-[10px] px-1.5 py-0.5 rounded shrink-0 ${
+            due.overdue ? "bg-red-100 text-red-700" : "bg-gray-100 text-gray-500"
+          }`}
+        >
+          {due.overdue ? "Overdue · " : "Due "}
+          {due.text}
+        </span>
+      )}
+      <span className="ml-auto flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <button
+          onClick={() => setEditing(true)}
+          className="text-xs text-gray-400 hover:text-gray-700"
+          aria-label="Edit task"
+        >
+          ✎
+        </button>
+        <button
+          onClick={() => onDelete(task.id)}
+          className="text-xs text-red-400 hover:text-red-600"
+          aria-label="Delete task"
+        >
+          ✕
+        </button>
+      </span>
     </li>
   );
 }
@@ -462,12 +754,14 @@ function MeetingHeader({ meeting, onUpdate }: { meeting: Meeting; onUpdate: () =
   const [form, setForm] = useState({
     title: meeting.title,
     location: meeting.location,
+    type: meeting.type,
     agenda: meeting.agenda || "",
     notes: meeting.notes || "",
     responsibleEmail: meeting.responsibleEmail || "",
   });
   const date = new Date(meeting.date);
   const isArchived = !!meeting.archivedAt;
+  const isExec = meeting.type === "exec";
 
   async function save() {
     await fetch(`/api/meetings/${meeting.id}`, {
@@ -496,7 +790,7 @@ function MeetingHeader({ meeting, onUpdate }: { meeting: Meeting; onUpdate: () =
     )
       return;
     const res = await fetch(`/api/meetings/${meeting.id}`, { method: "DELETE" });
-    if (res.ok) router.push("/");
+    if (res.ok) router.push("/meetings");
   }
 
   return (
@@ -507,6 +801,13 @@ function MeetingHeader({ meeting, onUpdate }: { meeting: Meeting; onUpdate: () =
             <h1 className="text-2xl font-bold text-gray-900">
               {date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
             </h1>
+            <span
+              className={`text-[10px] uppercase font-semibold tracking-wide px-1.5 py-0.5 rounded ${
+                isExec ? "bg-purple-100 text-purple-800" : "bg-sky-100 text-sky-800"
+              }`}
+            >
+              {isExec ? "Exec" : "Regular"}
+            </span>
             {isArchived && (
               <span className="text-[10px] uppercase font-semibold tracking-wide bg-amber-100 text-amber-800 px-1.5 py-0.5 rounded">
                 Archived
@@ -541,6 +842,24 @@ function MeetingHeader({ meeting, onUpdate }: { meeting: Meeting; onUpdate: () =
 
       {editing ? (
         <div className="space-y-3">
+          <Field label="Meeting type">
+            <div className="flex gap-2">
+              {(["regular", "exec"] as const).map((t) => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setForm({ ...form, type: t })}
+                  className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                    form.type === t
+                      ? "border-primary-500 bg-primary-50 text-primary-700"
+                      : "border-gray-300 text-gray-700 hover:bg-gray-50"
+                  }`}
+                >
+                  {t === "exec" ? "Exec" : "Regular"}
+                </button>
+              ))}
+            </div>
+          </Field>
           <Field label="Title">
             <input
               type="text"

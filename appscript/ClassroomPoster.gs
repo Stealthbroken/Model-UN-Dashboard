@@ -32,6 +32,7 @@ function doPost(e) {
 
     if (action === "email") return handleEmail(data);
     if (action === "createMinutesDoc") return handleCreateMinutesDoc(data);
+    if (action === "updateMinutesDoc") return handleUpdateMinutesDoc(data);
     return handleAnnouncement(data);
 
   } catch (err) {
@@ -243,6 +244,91 @@ function handleCreateMinutesDoc(data) {
     docId: doc.getId(),
     docUrl: doc.getUrl()
   });
+}
+
+/* ───────── Live Minutes update ───────── */
+
+/**
+ * Rewrites just the "Weekly Tasks" section of an existing minutes Doc, leaving
+ * the rest (Discussion Notes typed during the meeting, etc.) untouched.
+ */
+function handleUpdateMinutesDoc(data) {
+  if (!data.docId) {
+    return jsonResponse({ ok: false, error: "Missing docId" });
+  }
+
+  var doc;
+  try {
+    doc = DocumentApp.openById(data.docId);
+  } catch (e) {
+    return jsonResponse({ ok: false, error: "Cannot open doc: " + e });
+  }
+
+  var body = doc.getBody();
+  var execs = Array.isArray(data.executives) ? data.executives : [];
+
+  // Find the "Weekly Tasks" HEADING1 and the next HEADING1 after it.
+  var startIdx = -1;
+  var endIdx = -1;
+  var count = body.getNumChildren();
+  for (var i = 0; i < count; i++) {
+    var child = body.getChild(i);
+    if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
+      var para = child.asParagraph();
+      if (para.getHeading() === DocumentApp.ParagraphHeading.HEADING1) {
+        if (startIdx === -1 && para.getText() === "Weekly Tasks") {
+          startIdx = i;
+        } else if (startIdx !== -1 && i > startIdx) {
+          endIdx = i;
+          break;
+        }
+      }
+    }
+  }
+
+  if (startIdx === -1) {
+    return jsonResponse({ ok: false, error: "Weekly Tasks section not found" });
+  }
+  if (endIdx === -1) endIdx = count;
+
+  // Remove the old section (heading + body), bottom-up to keep indices stable.
+  for (var j = endIdx - 1; j >= startIdx; j--) {
+    body.removeChild(body.getChild(j));
+  }
+
+  // Insert the refreshed section at the same position.
+  var idx = startIdx;
+  body.insertParagraph(idx++, "Weekly Tasks")
+    .setHeading(DocumentApp.ParagraphHeading.HEADING1);
+
+  if (execs.length === 0) {
+    body.insertParagraph(idx++, "(No executives on roster.)")
+      .setHeading(DocumentApp.ParagraphHeading.NORMAL)
+      .setItalic(true);
+  } else {
+    for (var e = 0; e < execs.length; e++) {
+      var ex = execs[e];
+      var label = ex.name + (ex.role ? " — " + ex.role : "");
+      body.insertParagraph(idx++, label)
+        .setHeading(DocumentApp.ParagraphHeading.HEADING2);
+      var tasks = Array.isArray(ex.tasks) ? ex.tasks : [];
+      if (tasks.length === 0) {
+        body.insertParagraph(idx++, "(No tasks assigned yet.)")
+          .setHeading(DocumentApp.ParagraphHeading.NORMAL)
+          .setItalic(true);
+      } else {
+        for (var t = 0; t < tasks.length; t++) {
+          var prefix = tasks[t].completed ? "☑ " : "☐ ";
+          body.insertListItem(idx++, prefix + tasks[t].description)
+            .setGlyphType(DocumentApp.GlyphType.BULLET);
+        }
+      }
+    }
+  }
+  body.insertParagraph(idx++, "");
+
+  doc.saveAndClose();
+  return jsonResponse({ ok: true });
 }
 
 /* ───────── Helpers ───────── */

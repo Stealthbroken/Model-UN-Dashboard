@@ -12,6 +12,7 @@ model Meeting {
   date                 DateTime  @unique
   title                String    @default("Weekly MUN Meeting")
   location             String    @default("Room 137")
+  type                 String    @default("regular") // "regular" | "exec"
   agenda               String?
   notes                String?
   responsibleEmail     String?
@@ -25,6 +26,7 @@ model Meeting {
   topicGuide   TopicGuide?
   announcement ClassroomAnnouncement?
   tasks        Task[]
+  attendance   MeetingAttendance[]
 }
 
 model TopicGuide {
@@ -69,7 +71,20 @@ model Executive {
   sortOrder Int      @default(0)
   createdAt DateTime @default(now())
 
-  tasks Task[]
+  tasks      Task[]
+  attendance MeetingAttendance[]
+}
+
+model MeetingAttendance {
+  id          Int       @id @default(autoincrement())
+  present     Boolean   @default(false)
+  meetingId   Int
+  executiveId Int
+  meeting     Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  executive   Executive @relation(fields: [executiveId], references: [id], onDelete: Cascade)
+
+  @@unique([meetingId, executiveId])
+  @@index([meetingId])
 }
 
 model Setting {
@@ -82,6 +97,9 @@ model Task {
   description  String
   completed    Boolean   @default(false)
   completedAt  DateTime?
+  dueDate      DateTime?
+  priority     String    @default("medium") // "high" | "medium" | "low"
+  label        String?
   sortOrder    Int       @default(0)
   meetingId    Int
   executiveId  Int

@@ -31,4 +31,7 @@ app.prepare().then(() => {
 
   // Check for missing-announcement reminders every 15 minutes
   cron.schedule("*/15 * * * *", () => runCron("/api/reminders/cron", "reminders"));
+
+  // Send the weekly exec digest — Mondays at 8:00 AM
+  cron.schedule("0 8 * * 1", () => runCron("/api/digest/cron", "digest"));
 });

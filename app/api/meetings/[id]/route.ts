@@ -33,6 +33,8 @@ export async function PATCH(
       agenda: data.agenda || null,
       notes: data.notes || null,
       responsibleEmail: data.responsibleEmail || null,
+      type:
+        data.type === "regular" || data.type === "exec" ? data.type : undefined,
     },
   });
 
