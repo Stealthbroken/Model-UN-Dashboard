@@ -114,3 +114,28 @@ export async function createMinutesDoc(
     return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
   }
 }
+
+/**
+ * Rewrites just the "Weekly Tasks" section of an existing minutes Doc — used
+ * to keep the doc in sync as tasks are added/checked off in the dashboard.
+ */
+export async function updateMinutesDoc(
+  docId: string,
+  executives: MinutesDocExecutive[],
+): Promise<{ ok: boolean; error?: string }> {
+  const url = process.env.APPS_SCRIPT_URL;
+  if (!url) return { ok: false, error: "Apps Script URL not configured" };
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "updateMinutesDoc", docId, executives }),
+    });
+    if (!res.ok) return { ok: false, error: `Apps Script returned ${res.status}` };
+    const data = await res.json();
+    return { ok: !!data.ok, error: data.error };
+  } catch (err: unknown) {
+    return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}

@@ -9,6 +9,8 @@ async function tryCreateMinutesDoc(meetingId: number): Promise<void> {
     if (!process.env.APPS_SCRIPT_URL) return;
     const meeting = await prisma.meeting.findUnique({ where: { id: meetingId } });
     if (!meeting) return;
+    // Minutes docs are an exec-meeting feature only.
+    if (meeting.type !== "exec") return;
     const [execs, settings] = await Promise.all([
       prisma.executive.findMany({
         where: { active: true },
@@ -62,10 +64,15 @@ export async function POST(request: NextRequest) {
   return createSingle(data);
 }
 
+function normalizeType(type?: string): "regular" | "exec" {
+  return type === "exec" ? "exec" : "regular";
+}
+
 async function createSingle(data: {
   date: string;
   title?: string;
   location?: string;
+  type?: string;
 }) {
   if (!data.date) {
     return NextResponse.json({ error: "date is required" }, { status: 400 });
@@ -76,6 +83,7 @@ async function createSingle(data: {
         date: new Date(data.date),
         title: data.title || "MUN Meeting",
         location: data.location || "Room 137",
+        type: normalizeType(data.type),
       },
     });
     await tryCreateMinutesDoc(meeting.id);
@@ -95,6 +103,7 @@ async function createRecurring(data: {
   minute: number;
   title?: string;
   location?: string;
+  type?: string;
 }) {
   const { startDate, endDate, dayOfWeek, hour, minute } = data;
   if (
@@ -141,6 +150,7 @@ async function createRecurring(data: {
           date,
           title: data.title || "Weekly MUN Meeting",
           location: data.location || "Room 137",
+          type: normalizeType(data.type),
         },
       });
       created.push(m);

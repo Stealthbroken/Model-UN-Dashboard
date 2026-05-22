@@ -11,3 +11,156 @@ body {
     @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm;
   }
 }
+
+/* ───────────────────────── Dark mode ─────────────────────────
+   Applied via a `dark` class on <html>. Structural Tailwind classes
+   are remapped here so the whole app themes without per-component edits.
+   `.dark .x` (specificity 0,2,0) outranks the plain `.x` utility (0,1,0). */
+.dark {
+  color-scheme: dark;
+  accent-color: #3b82f6;
+}
+
+/* Surfaces */
+.dark body,
+.dark .bg-gray-50 {
+  background-color: #0f172a;
+}
+.dark .bg-white {
+  background-color: #1e293b;
+}
+.dark .bg-gray-100 {
+  background-color: #334155;
+}
+.dark .bg-gray-200 {
+  background-color: #475569;
+}
+
+/* Text */
+.dark .text-gray-900 {
+  color: #f1f5f9;
+}
+.dark .text-gray-800 {
+  color: #e2e8f0;
+}
+.dark .text-gray-700 {
+  color: #cbd5e1;
+}
+.dark .text-gray-600,
+.dark .text-gray-500 {
+  color: #94a3b8;
+}
+.dark .text-gray-400 {
+  color: #64748b;
+}
+
+/* Borders + dividers */
+.dark .border-gray-100,
+.dark .border-gray-200,
+.dark .border-gray-300 {
+  border-color: #334155;
+}
+.dark .divide-gray-100 > * + *,
+.dark .divide-gray-200 > * + * {
+  border-color: #334155;
+}
+
+/* Hover states */
+.dark .hover\:bg-gray-50:hover {
+  background-color: #334155;
+}
+.dark .hover\:bg-gray-100:hover {
+  background-color: #334155;
+}
+.dark .hover\:bg-gray-200:hover {
+  background-color: #475569;
+}
+.dark .hover\:bg-white:hover {
+  background-color: #1e293b;
+}
+
+/* Form fields */
+.dark .input,
+.dark select,
+.dark textarea {
+  background-color: #0f172a;
+  color: #e2e8f0;
+  border-color: #334155;
+}
+.dark ::placeholder {
+  color: #64748b;
+}
+
+/* Accent surfaces — dark tints so soft cards/badges/alerts read on dark */
+.dark .bg-primary-50,
+.dark .bg-primary-100 {
+  background-color: #16264a;
+}
+.dark .bg-green-50,
+.dark .bg-green-100 {
+  background-color: #0c2a18;
+}
+.dark .bg-amber-50,
+.dark .bg-amber-100 {
+  background-color: #3a2706;
+}
+.dark .bg-red-50,
+.dark .bg-red-100 {
+  background-color: #3a1216;
+}
+.dark .bg-sky-50,
+.dark .bg-sky-100 {
+  background-color: #0c2a3a;
+}
+.dark .bg-purple-50,
+.dark .bg-purple-100 {
+  background-color: #241b3a;
+}
+
+/* Accent text — lighter shades for contrast on the dark tints above */
+.dark .text-primary-600,
+.dark .text-primary-700,
+.dark .text-primary-800 {
+  color: #93c5fd;
+}
+.dark .text-green-600,
+.dark .text-green-700,
+.dark .text-green-800 {
+  color: #4ade80;
+}
+.dark .text-amber-600,
+.dark .text-amber-700,
+.dark .text-amber-800 {
+  color: #fcd34d;
+}
+.dark .text-red-500,
+.dark .text-red-600,
+.dark .text-red-700,
+.dark .text-red-800 {
+  color: #f87171;
+}
+.dark .text-sky-700,
+.dark .text-sky-800 {
+  color: #7dd3fc;
+}
+.dark .text-purple-700,
+.dark .text-purple-800 {
+  color: #c4b5fd;
+}
+
+/* Accent borders */
+.dark .border-red-200 {
+  border-color: #7f1d1d;
+}
+.dark .border-amber-200 {
+  border-color: #78350f;
+}
+.dark .border-green-200,
+.dark .border-green-300 {
+  border-color: #14532d;
+}
+.dark .border-primary-200,
+.dark .border-primary-400,
+.dark .border-primary-500 {
+  border-color: #1d4ed8;
+}

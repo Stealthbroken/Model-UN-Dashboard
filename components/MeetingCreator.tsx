@@ -40,6 +40,7 @@ export function MeetingCreator() {
 function Modal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const [tab, setTab] = useState<"single" | "recurring">("single");
+  const [meetingType, setMeetingType] = useState<"regular" | "exec">("regular");
   const [submitting, setSubmitting] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
 
@@ -64,12 +65,14 @@ function Modal({ onClose }: { onClose: () => void }) {
       tab === "single"
         ? {
             mode: "single",
+            type: meetingType,
             date: singleDate,
             title: singleTitle,
             location: singleLocation,
           }
         : {
             mode: "recurring",
+            type: meetingType,
             startDate,
             endDate,
             dayOfWeek,
@@ -134,6 +137,23 @@ function Modal({ onClose }: { onClose: () => void }) {
         </div>
 
         <div className="p-5 space-y-4">
+          <Field label="Meeting type">
+            <div className="grid grid-cols-2 gap-2">
+              <TypeBtn
+                active={meetingType === "regular"}
+                onClick={() => setMeetingType("regular")}
+                title="Regular"
+                desc="Topic guide + Classroom post"
+              />
+              <TypeBtn
+                active={meetingType === "exec"}
+                onClick={() => setMeetingType("exec")}
+                title="Exec"
+                desc="Executive tasks + minutes"
+              />
+            </div>
+          </Field>
+
           {tab === "single" ? (
             <>
               <Field label="Date & time">
@@ -287,6 +307,35 @@ function TabBtn({
       }`}
     >
       {children}
+    </button>
+  );
+}
+
+function TypeBtn({
+  active,
+  onClick,
+  title,
+  desc,
+}: {
+  active: boolean;
+  onClick: () => void;
+  title: string;
+  desc: string;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`text-left px-3 py-2 rounded-lg border transition-colors ${
+        active
+          ? "border-primary-500 bg-primary-50 ring-1 ring-primary-200"
+          : "border-gray-300 hover:bg-gray-50"
+      }`}
+    >
+      <span className={`block text-sm font-semibold ${active ? "text-primary-700" : "text-gray-900"}`}>
+        {title}
+      </span>
+      <span className="block text-[11px] text-gray-500 leading-tight mt-0.5">{desc}</span>
     </button>
   );
 }

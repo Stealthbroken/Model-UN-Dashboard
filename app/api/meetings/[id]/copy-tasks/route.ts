@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { syncMinutesDoc } from "@/lib/minutes-sync";
 
 export async function POST(
   _request: NextRequest,
@@ -59,10 +60,13 @@ export async function POST(
         meetingId: id,
         executiveId: t.executiveId,
         description: t.description,
+        priority: t.priority,
+        label: t.label,
         sortOrder: order,
       },
     });
   }
 
+  void syncMinutesDoc(id);
   return NextResponse.json({ copied: toCreate.length });
 }

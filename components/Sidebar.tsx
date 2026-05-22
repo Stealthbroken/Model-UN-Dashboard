@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { ThemeToggle } from "@/components/ThemeToggle";
 
 interface NavItem {
   href: string;
@@ -11,8 +12,12 @@ interface NavItem {
 }
 
 const dashboardNav: NavItem[] = [
-  { href: "/", icon: "📅", label: "Upcoming Meetings" },
+  { href: "/", icon: "🏠", label: "Dashboard" },
+  { href: "/meetings", icon: "📅", label: "Meetings" },
+  { href: "/calendar", icon: "🗓️", label: "Calendar" },
   { href: "/archive", icon: "🗂️", label: "Past Meetings" },
+  { href: "/my-tasks", icon: "✅", label: "My Tasks" },
+  { href: "/stats", icon: "📊", label: "Exec Stats" },
   { href: "/executives", icon: "👥", label: "Sec-Gen Panel" },
   { href: "/instagram", icon: "📷", label: "Instagram" },
 ];
@@ -48,6 +53,7 @@ export function Sidebar() {
 
       <div className="pt-4 border-t border-gray-100">
         <p className="text-xs text-gray-400 mb-2">Thursdays · 11:10 AM · Room 137</p>
+        <ThemeToggle />
         <form action="/api/auth/logout" method="POST">
           <button
             type="submit"

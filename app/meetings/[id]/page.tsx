@@ -15,6 +15,7 @@ export default async function MeetingPage({ params }: { params: { id: string } }
       topicGuide: { select: { id: true, filename: true, path: true } },
       announcement: true,
       tasks: { orderBy: { sortOrder: "asc" } },
+      attendance: true,
     },
   });
 
