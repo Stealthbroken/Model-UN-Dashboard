@@ -41,14 +41,15 @@ model TopicGuide {
 }
 
 model ClassroomAnnouncement {
-  id           Int       @id @default(autoincrement())
-  body         String
-  scheduledFor DateTime?
-  status       String    @default("draft")
-  sentAt       DateTime?
-  meetingId    Int       @unique
-  meeting      Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
-  createdAt    DateTime  @default(now())
+  id            Int       @id @default(autoincrement())
+  body          String
+  scheduledFor  DateTime?
+  status        String    @default("draft")
+  sentAt        DateTime?
+  discordSentAt DateTime?
+  meetingId     Int       @unique
+  meeting       Meeting   @relation(fields: [meetingId], references: [id], onDelete: Cascade)
+  createdAt     DateTime  @default(now())
 }
 
 model InstagramPost {

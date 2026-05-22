@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { RichTextEditor } from "@/components/RichTextEditor";
+import { fmtDate, fmtDateCompact, fmtDateLong, fmtTime } from "@/lib/format";
 
 interface TopicGuide {
   id: number;
@@ -17,6 +18,7 @@ interface ClassroomAnnouncement {
   scheduledFor: string | null;
   status: string;
   sentAt: string | null;
+  discordSentAt: string | null;
 }
 
 interface Task {
@@ -99,10 +101,7 @@ function dueDateInfo(
   if (!dueDate) return null;
   const d = new Date(dueDate);
   const overdue = !completed && d < new Date();
-  return {
-    text: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-    overdue,
-  };
+  return { text: fmtDateCompact(d), overdue };
 }
 
 function toDateInputValue(iso: string | null): string {
@@ -137,6 +136,11 @@ export function MeetingDetail({
 
       {isExec ? (
         <>
+          {/* Minutes Doc — shown first */}
+          <div className="mt-6">
+            <MinutesDocSection meeting={meeting} onChange={() => router.refresh()} />
+          </div>
+
           {/* Attendance */}
           <div className="mt-6">
             <AttendanceSection
@@ -154,11 +158,6 @@ export function MeetingDetail({
               previousUnfinishedCount={previousUnfinishedCount}
               onChange={() => router.refresh()}
             />
-          </div>
-
-          {/* Minutes Doc */}
-          <div className="mt-6">
-            <MinutesDocSection meeting={meeting} onChange={() => router.refresh()} />
           </div>
         </>
       ) : (
@@ -262,6 +261,16 @@ function ExecutivesTasksSection({
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+
+  function toggleCollapse(execId: number) {
+    setCollapsed((cur) => {
+      const next = new Set(cur);
+      if (next.has(execId)) next.delete(execId);
+      else next.add(execId);
+      return next;
+    });
+  }
 
   const tasksByExec = new Map<number, Task[]>();
   for (const t of meeting.tasks) {
@@ -347,7 +356,21 @@ function ExecutivesTasksSection({
             {completedTasks}/{totalTasks} done
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
+          {executives.length > 1 && (
+            <button
+              onClick={() =>
+                setCollapsed(
+                  collapsed.size === executives.length
+                    ? new Set()
+                    : new Set(executives.map((e) => e.id)),
+                )
+              }
+              className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              {collapsed.size === executives.length ? "Expand all" : "Collapse all"}
+            </button>
+          )}
           <button
             onClick={copyFromLast}
             disabled={busy === "copy" || previousUnfinishedCount === 0}
@@ -358,7 +381,7 @@ function ExecutivesTasksSection({
                 : `Copy ${previousUnfinishedCount} unfinished task(s) from the previous meeting`
             }
           >
-            {busy === "copy" ? "Copying..." : `↻ Copy unfinished from last meeting (${previousUnfinishedCount})`}
+            {busy === "copy" ? "Copying..." : `↻ Copy unfinished (${previousUnfinishedCount})`}
           </button>
           <Link
             href="/executives"
@@ -389,6 +412,8 @@ function ExecutivesTasksSection({
               exec={e}
               tasks={tasksByExec.get(e.id) || []}
               busy={busy}
+              collapsed={collapsed.has(e.id)}
+              onToggleCollapse={() => toggleCollapse(e.id)}
               onToggle={toggleTask}
               onAdd={addTask}
               onEdit={editTask}
@@ -434,6 +459,8 @@ function ExecutiveTaskRow({
   exec,
   tasks,
   busy,
+  collapsed,
+  onToggleCollapse,
   onToggle,
   onAdd,
   onEdit,
@@ -442,6 +469,8 @@ function ExecutiveTaskRow({
   exec: Executive;
   tasks: Task[];
   busy: string | null;
+  collapsed: boolean;
+  onToggleCollapse: () => void;
   onToggle: (t: Task) => void;
   onAdd: (executiveId: number, payload: NewTaskInput) => void;
   onEdit: (taskId: number, patch: Record<string, unknown>) => void;
@@ -463,72 +492,90 @@ function ExecutiveTaskRow({
     setLabel("");
   }
 
+  const openCount = tasks.length - doneCount;
+
   return (
     <li className="py-3">
-      <div className="flex items-baseline justify-between gap-2 mb-1.5">
-        <div>
-          <span className="font-medium text-gray-900">{exec.name}</span>
-          {exec.role && <span className="text-xs text-gray-500 ml-2">{exec.role}</span>}
-        </div>
-        <span className="text-[11px] text-gray-400">
+      <button
+        type="button"
+        onClick={onToggleCollapse}
+        className="w-full flex items-baseline justify-between gap-2 text-left"
+      >
+        <span className="flex items-baseline gap-1.5 min-w-0">
+          <span className="text-gray-400 text-xs w-3 shrink-0">
+            {collapsed ? "▸" : "▾"}
+          </span>
+          <span className="font-medium text-gray-900 truncate">{exec.name}</span>
+          {exec.role && (
+            <span className="text-xs text-gray-500 truncate">{exec.role}</span>
+          )}
+        </span>
+        <span className="text-[11px] text-gray-400 shrink-0">
+          {collapsed && openCount > 0 ? (
+            <span className="text-amber-600 font-medium">{openCount} open · </span>
+          ) : null}
           {doneCount}/{tasks.length}
         </span>
-      </div>
+      </button>
 
-      {tasks.length > 0 && (
-        <ul className="space-y-1 mb-2">
-          {tasks.map((t) => (
-            <TaskItem
-              key={t.id}
-              task={t}
-              busy={busy}
-              onToggle={onToggle}
-              onEdit={onEdit}
-              onDelete={onDelete}
+      {!collapsed && (
+        <div className="mt-1.5">
+          {tasks.length > 0 && (
+            <ul className="space-y-1 mb-2">
+              {tasks.map((t) => (
+                <TaskItem
+                  key={t.id}
+                  task={t}
+                  busy={busy}
+                  onToggle={onToggle}
+                  onEdit={onEdit}
+                  onDelete={onDelete}
+                />
+              ))}
+            </ul>
+          )}
+
+          <form onSubmit={submit} className="flex flex-wrap gap-2 items-center">
+            <input
+              value={desc}
+              onChange={(e) => setDesc(e.target.value)}
+              placeholder={`Add a task for ${exec.name.split(" ")[0]}...`}
+              className="input flex-1 min-w-[10rem] text-sm"
             />
-          ))}
-        </ul>
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+              className="input text-sm !w-auto"
+              title="Priority"
+            >
+              <option value="high">High</option>
+              <option value="medium">Medium</option>
+              <option value="low">Low</option>
+            </select>
+            <input
+              type="date"
+              value={dueDate}
+              onChange={(e) => setDueDate(e.target.value)}
+              className="input text-sm !w-auto"
+              title="Due date (optional)"
+            />
+            <input
+              value={label}
+              onChange={(e) => setLabel(e.target.value)}
+              placeholder="Label"
+              className="input text-sm !w-24"
+              title="Category label (optional)"
+            />
+            <button
+              type="submit"
+              disabled={!desc.trim() || busy === `add-${exec.id}`}
+              className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+            >
+              {busy === `add-${exec.id}` ? "..." : "+ Add"}
+            </button>
+          </form>
+        </div>
       )}
-
-      <form onSubmit={submit} className="flex flex-wrap gap-2 items-center">
-        <input
-          value={desc}
-          onChange={(e) => setDesc(e.target.value)}
-          placeholder={`Add a task for ${exec.name.split(" ")[0]}...`}
-          className="input flex-1 min-w-[10rem] text-sm"
-        />
-        <select
-          value={priority}
-          onChange={(e) => setPriority(e.target.value)}
-          className="input text-sm !w-auto"
-          title="Priority"
-        >
-          <option value="high">High</option>
-          <option value="medium">Medium</option>
-          <option value="low">Low</option>
-        </select>
-        <input
-          type="date"
-          value={dueDate}
-          onChange={(e) => setDueDate(e.target.value)}
-          className="input text-sm !w-auto"
-          title="Due date (optional)"
-        />
-        <input
-          value={label}
-          onChange={(e) => setLabel(e.target.value)}
-          placeholder="Label"
-          className="input text-sm !w-24"
-          title="Category label (optional)"
-        />
-        <button
-          type="submit"
-          disabled={!desc.trim() || busy === `add-${exec.id}`}
-          className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-        >
-          {busy === `add-${exec.id}` ? "..." : "+ Add"}
-        </button>
-      </form>
     </li>
   );
 }
@@ -715,7 +762,8 @@ function MinutesDocSection({
           </a>
           {meeting.minutesDocCreatedAt && (
             <p className="text-xs text-gray-500">
-              Created {new Date(meeting.minutesDocCreatedAt).toLocaleString()}
+              Created {fmtDate(meeting.minutesDocCreatedAt)} ·{" "}
+              {fmtTime(meeting.minutesDocCreatedAt)}
             </p>
           )}
           <button
@@ -799,7 +847,7 @@ function MeetingHeader({ meeting, onUpdate }: { meeting: Meeting; onUpdate: () =
         <div>
           <div className="flex items-center gap-2 flex-wrap">
             <h1 className="text-2xl font-bold text-gray-900">
-              {date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric" })}
+              {fmtDateLong(date)}
             </h1>
             <span
               className={`text-[10px] uppercase font-semibold tracking-wide px-1.5 py-0.5 rounded ${
@@ -815,7 +863,7 @@ function MeetingHeader({ meeting, onUpdate }: { meeting: Meeting; onUpdate: () =
             )}
           </div>
           <p className="text-gray-500 mt-1">
-            {date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })} • {meeting.location}
+            {fmtTime(date)} • {meeting.location}
           </p>
         </div>
         <div className="flex gap-2 flex-wrap justify-end">
@@ -1005,6 +1053,7 @@ function ClassroomSection({
   );
   const [saving, setSaving] = useState<null | "draft" | "schedule">(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [mirroring, setMirroring] = useState(false);
 
   const locked = announcement?.status === "sent";
 
@@ -1040,6 +1089,24 @@ function ClassroomSection({
       body: JSON.stringify({ id: announcement.id }),
     });
     setBody("");
+    onChange();
+  }
+
+  async function mirrorToDiscord() {
+    setMirroring(true);
+    setMessage(null);
+    const res = await fetch("/api/discord", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ body, announcementId: announcement?.id ?? null }),
+    });
+    const data = await res.json();
+    if (!res.ok || data.error) {
+      setMessage(`Error: ${data.error || "Discord mirror failed"}`);
+    } else {
+      setMessage("Mirrored to Discord.");
+    }
+    setMirroring(false);
     onChange();
   }
 
@@ -1117,6 +1184,24 @@ function ClassroomSection({
             </button>
           </div>
         )}
+
+        {/* Mirror to Discord — works on a draft or a posted announcement */}
+        <div className="border-t border-gray-100 pt-3 flex items-center gap-2 flex-wrap">
+          <button
+            onClick={mirrorToDiscord}
+            disabled={mirroring || !body}
+            className="px-3 py-1.5 text-sm font-medium rounded-lg border border-[#5865F2] text-[#5865F2] hover:bg-[#5865F2]/10 transition-colors disabled:opacity-50"
+            title="Send this announcement to the configured Discord channel"
+          >
+            {mirroring ? "Mirroring…" : "Mirror to Discord"}
+          </button>
+          {announcement?.discordSentAt && (
+            <span className="text-[11px] text-gray-500">
+              Last mirrored {fmtDate(announcement.discordSentAt)} ·{" "}
+              {fmtTime(announcement.discordSentAt)}
+            </span>
+          )}
+        </div>
       </div>
     </Section>
   );

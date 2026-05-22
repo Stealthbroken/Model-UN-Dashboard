@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/db";
 import Link from "next/link";
+import { fmtDateCompact, fmtDateLong, fmtDateRow, fmtTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
@@ -53,14 +54,7 @@ export default async function DashboardPage() {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
         <StatCard
           label="Next meeting"
-          value={
-            nextMeeting
-              ? new Date(nextMeeting.date).toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                })
-              : "—"
-          }
+          value={nextMeeting ? fmtDateCompact(nextMeeting.date) : "—"}
           tone="primary"
         />
         <StatCard label="Open tasks" value={String(openTasks)} tone="amber" />
@@ -83,18 +77,10 @@ export default async function DashboardPage() {
           {nextMeeting ? (
             <Link href={`/meetings/${nextMeeting.id}`} className="block group">
               <p className="text-lg font-semibold text-gray-900 group-hover:text-primary-600">
-                {new Date(nextMeeting.date).toLocaleDateString("en-US", {
-                  weekday: "long",
-                  month: "long",
-                  day: "numeric",
-                })}
+                {fmtDateLong(nextMeeting.date)}
               </p>
               <p className="text-sm text-gray-500 mb-3">
-                {new Date(nextMeeting.date).toLocaleTimeString("en-US", {
-                  hour: "numeric",
-                  minute: "2-digit",
-                })}{" "}
-                • {nextMeeting.location}
+                {fmtTime(nextMeeting.date)} • {nextMeeting.location}
               </p>
               <div className="flex flex-wrap gap-2">
                 {nextMeeting.type === "exec" ? (
@@ -134,11 +120,7 @@ export default async function DashboardPage() {
                     {t.completedAt && (
                       <span className="text-gray-400">
                         {" "}
-                        ·{" "}
-                        {new Date(t.completedAt).toLocaleDateString("en-US", {
-                          month: "short",
-                          day: "numeric",
-                        })}
+                        · {fmtDateCompact(t.completedAt)}
                       </span>
                     )}
                   </span>
@@ -180,12 +162,7 @@ export default async function DashboardPage() {
                       {isExec ? "Exec" : "Reg"}
                     </span>
                     <span className="flex-1 text-sm text-gray-800">
-                      {new Date(m.date).toLocaleDateString("en-US", {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric",
-                      })}{" "}
-                      — {m.title}
+                      {fmtDateRow(m.date)} — {m.title}
                     </span>
                     <span
                       className={`text-xs font-medium ${

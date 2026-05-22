@@ -118,8 +118,9 @@ function handleCreateMinutesDoc(data) {
   }
 
   var tz = Session.getScriptTimeZone();
-  var docName = "MUN Minutes — " +
-    Utilities.formatDate(new Date(data.date), tz, "yyyy-MM-dd") + " — " + data.title;
+  // Doc title: day-first date, then the meeting title.
+  var docName =
+    Utilities.formatDate(new Date(data.date), tz, "dd/MM/yyyy") + " — " + data.title;
 
   var doc;
   if (sharedDriveId) {
@@ -240,7 +241,7 @@ function insertManagedSections(body, startIndex, data) {
     .setHeading(DocumentApp.ParagraphHeading.SUBTITLE);
 
   var metaLine =
-    Utilities.formatDate(meetingDate, tz, "EEEE, MMMM d, yyyy") + "      " +
+    Utilities.formatDate(meetingDate, tz, "EEEE  dd/MM/yyyy") + "      " +
     Utilities.formatDate(meetingDate, tz, "h:mm a") + "      " +
     (data.location || "—");
   mutedLine(body, idx++, metaLine, 10, false);
@@ -248,7 +249,7 @@ function insertManagedSections(body, startIndex, data) {
   mutedLine(
     body, idx++,
     "Auto-synced from the MUN Dashboard · last updated " +
-      Utilities.formatDate(new Date(), tz, "MMM d, yyyy 'at' h:mm a"),
+      Utilities.formatDate(new Date(), tz, "dd/MM/yyyy 'at' h:mm a"),
     8, true
   );
 
@@ -335,7 +336,7 @@ function insertTaskLine(body, idx, task, tz) {
   if (task.priority === "high") extras.push("High priority");
   if (task.label) extras.push(task.label);
   if (task.dueDate) {
-    extras.push("due " + Utilities.formatDate(new Date(task.dueDate), tz, "MMM d"));
+    extras.push("due " + Utilities.formatDate(new Date(task.dueDate), tz, "dd/MM"));
   }
   var suffix = extras.length ? "      (" + extras.join("  ·  ") + ")" : "";
 

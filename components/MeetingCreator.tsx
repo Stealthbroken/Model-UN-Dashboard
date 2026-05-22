@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
@@ -10,10 +10,14 @@ function todayLocalDate(): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
-function todayLocalDateTime(): string {
+// Today at the standard 11:10 AM meeting slot, as a datetime-local value.
+function defaultMeetingDateTime(): string {
   const d = new Date();
-  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-  return d.toISOString().slice(0, 16);
+  d.setHours(11, 10, 0, 0);
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(
+    d.getHours(),
+  )}:${pad(d.getMinutes())}`;
 }
 function plusMonths(months: number): string {
   const d = new Date();
@@ -45,7 +49,7 @@ function Modal({ onClose }: { onClose: () => void }) {
   const [message, setMessage] = useState<string | null>(null);
 
   // Single
-  const [singleDate, setSingleDate] = useState(todayLocalDateTime());
+  const [singleDate, setSingleDate] = useState(defaultMeetingDateTime());
   const [singleTitle, setSingleTitle] = useState("MUN Meeting");
   const [singleLocation, setSingleLocation] = useState("Room 137");
 
@@ -57,6 +61,29 @@ function Modal({ onClose }: { onClose: () => void }) {
   const [minute, setMinute] = useState(10);
   const [recTitle, setRecTitle] = useState("Weekly MUN Meeting");
   const [recLocation, setRecLocation] = useState("Room 137");
+
+  // Close the modal on Escape.
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
+
+  // Switching meeting type also nudges the title/time defaults — but only when
+  // the user hasn't typed their own title.
+  function chooseType(t: "regular" | "exec") {
+    setMeetingType(t);
+    if (singleTitle === "MUN Meeting" || singleTitle === "Executive Meeting") {
+      setSingleTitle(t === "exec" ? "Executive Meeting" : "MUN Meeting");
+    }
+    if (recTitle === "Weekly MUN Meeting" || recTitle === "Weekly Executive Meeting") {
+      setRecTitle(t === "exec" ? "Weekly Executive Meeting" : "Weekly MUN Meeting");
+    }
+    // Exec meetings run at the standard 11:10 AM slot.
+    if (t === "exec") setSingleDate(defaultMeetingDateTime());
+  }
 
   async function submit() {
     setSubmitting(true);
@@ -141,13 +168,13 @@ function Modal({ onClose }: { onClose: () => void }) {
             <div className="grid grid-cols-2 gap-2">
               <TypeBtn
                 active={meetingType === "regular"}
-                onClick={() => setMeetingType("regular")}
+                onClick={() => chooseType("regular")}
                 title="Regular"
                 desc="Topic guide + Classroom post"
               />
               <TypeBtn
                 active={meetingType === "exec"}
-                onClick={() => setMeetingType("exec")}
+                onClick={() => chooseType("exec")}
                 title="Exec"
                 desc="Executive tasks + minutes"
               />

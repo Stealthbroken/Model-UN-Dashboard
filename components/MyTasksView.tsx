@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
+import { fmtDateCompact } from "@/lib/format";
 
 interface Exec {
   id: number;
@@ -221,11 +222,7 @@ function TaskCard({
             href={`/meetings/${task.meeting.id}`}
             className="text-[11px] text-gray-500 hover:underline"
           >
-            {meetingDate.toLocaleDateString("en-US", {
-              month: "short",
-              day: "numeric",
-            })}{" "}
-            · {task.meeting.title}
+            {fmtDateCompact(meetingDate)} · {task.meeting.title}
           </Link>
           {task.label && (
             <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-600">
@@ -239,10 +236,7 @@ function TaskCard({
               }`}
             >
               {overdue ? "Overdue · " : "Due "}
-              {new Date(task.dueDate).toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-              })}
+              {fmtDateCompact(task.dueDate)}
             </span>
           )}
         </div>

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { sendReminderEmail } from "@/lib/appscript";
+import { fmtDateLong, fmtTime } from "@/lib/format";
 
 /**
  * Sends reminder emails to the responsible person if a meeting's classroom
@@ -29,13 +30,7 @@ export async function POST() {
   for (const meeting of meetings) {
     if (!meeting.responsibleEmail) continue;
 
-    const meetingTime = meeting.date.toLocaleString("en-US", {
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
-    });
+    const meetingTime = `${fmtDateLong(meeting.date)} at ${fmtTime(meeting.date)}`;
 
     const subject = `MUN Reminder: No announcement scheduled for ${meeting.title}`;
     const body = `
