@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 interface Executive {
-  id: number;
+  id: string;
   name: string;
   role: string;
   email: string | null;
@@ -35,7 +35,7 @@ export function ExecutivesManager({ initial }: { initial: Executive[] }) {
     router.refresh();
   }
 
-  async function update(id: number, patch: Partial<Executive>) {
+  async function update(id: string, patch: Partial<Executive>) {
     setExecs((cur) => cur.map((e) => (e.id === id ? { ...e, ...patch } : e)));
     await fetch(`/api/executives/${id}`, {
       method: "PATCH",
@@ -45,7 +45,7 @@ export function ExecutivesManager({ initial }: { initial: Executive[] }) {
     router.refresh();
   }
 
-  async function remove(id: number) {
+  async function remove(id: string) {
     if (
       !confirm(
         "Delete this executive? All of their assigned tasks across all meetings will also be deleted.",
@@ -125,8 +125,8 @@ function ExecList({
 }: {
   title: string;
   execs: Executive[];
-  onUpdate: (id: number, patch: Partial<Executive>) => void;
-  onRemove: (id: number) => void;
+  onUpdate: (id: string, patch: Partial<Executive>) => void;
+  onRemove: (id: string) => void;
 }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
@@ -152,8 +152,8 @@ function ExecRow({
   onRemove,
 }: {
   exec: Executive;
-  onUpdate: (id: number, patch: Partial<Executive>) => void;
-  onRemove: (id: number) => void;
+  onUpdate: (id: string, patch: Partial<Executive>) => void;
+  onRemove: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({

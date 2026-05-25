@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { fmtDate, fmtDateTime } from "@/lib/format";
 
 interface InstagramPost {
-  id: number;
+  id: string;
   caption: string;
   imagePath: string | null;
   status: string;
@@ -20,7 +20,7 @@ interface Props {
 
 export function InstagramManager({ posts, apiConfigured }: Props) {
   const router = useRouter();
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
   const drafts = posts.filter((p) => p.status !== "posted");
   const posted = posts.filter((p) => p.status === "posted");

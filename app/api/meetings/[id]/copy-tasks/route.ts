@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { prisma } from "@/lib/db";
+import { prisma, type Task } from "@/lib/db";
 import { syncMinutesDoc } from "@/lib/minutes-sync";
 
 export async function POST(
@@ -22,7 +22,7 @@ export async function POST(
     return NextResponse.json({ copied: 0, message: "No previous meeting." });
   }
 
-  const unfinished = previous.tasks.filter((t) => !t.completed);
+  const unfinished = (previous.tasks as Task[]).filter((t) => !t.completed);
 
   if (unfinished.length === 0) {
     return NextResponse.json({ copied: 0, message: "Nothing unfinished to carry over." });
@@ -36,7 +36,7 @@ export async function POST(
   const existingKey = new Set(existing.map((t) => `${t.executiveId}::${t.description}`));
 
   const toCreate = unfinished.filter(
-    (t) => !existingKey.has(`${t.executiveId}::${t.description}`),
+    (t: Task) => !existingKey.has(`${t.executiveId}::${t.description}`),
   );
 
   if (toCreate.length === 0) {

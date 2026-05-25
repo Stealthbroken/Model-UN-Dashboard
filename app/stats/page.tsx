@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { prisma, type Task, type MeetingAttendance } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +17,12 @@ export default async function StatsPage() {
 
   const rows = executives
     .map((e) => {
-      const total = e.tasks.length;
-      const done = e.tasks.filter((t) => t.completed).length;
+      const tasks = e.tasks as Task[];
+      const attendance = e.attendance as MeetingAttendance[];
+      const total = tasks.length;
+      const done = tasks.filter((t) => t.completed).length;
       const completionRate = total > 0 ? Math.round((done / total) * 100) : null;
-      const attended = e.attendance.filter((a) => a.present).length;
+      const attended = attendance.filter((a) => a.present).length;
       const attendanceRate =
         execMeetingCount > 0 ? Math.round((attended / execMeetingCount) * 100) : null;
       return { id: e.id, name: e.name, role: e.role, total, done, completionRate, attended, attendanceRate };

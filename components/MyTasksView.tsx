@@ -5,19 +5,19 @@ import Link from "next/link";
 import { fmtDateCompact } from "@/lib/format";
 
 interface Exec {
-  id: number;
+  id: string;
   name: string;
   role: string;
 }
 
 interface TaskWithMeeting {
-  id: number;
+  id: string;
   description: string;
   completed: boolean;
   dueDate: string | null;
   priority: string;
   label: string | null;
-  meeting: { id: number; date: string; title: string; type: string };
+  meeting: { id: string; date: string; title: string; type: string };
 }
 
 const STORAGE_KEY = "mun-my-tasks-exec";
@@ -29,19 +29,19 @@ const PRIORITY_DOT: Record<string, string> = {
 };
 
 export function MyTasksView({ executives }: { executives: Exec[] }) {
-  const [execId, setExecId] = useState<number | null>(null);
+  const [execId, setExecId] = useState<string | null>(null);
   const [tasks, setTasks] = useState<TaskWithMeeting[]>([]);
   const [loading, setLoading] = useState(false);
-  const [busy, setBusy] = useState<number | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved && executives.some((e) => e.id === Number(saved))) {
-      setExecId(Number(saved));
+    if (saved && executives.some((e) => e.id === saved)) {
+      setExecId(saved);
     }
   }, [executives]);
 
-  const load = useCallback(async (id: number) => {
+  const load = useCallback(async (id: string) => {
     setLoading(true);
     const res = await fetch(`/api/tasks?executiveId=${id}`);
     const data = await res.json();
@@ -54,14 +54,13 @@ export function MyTasksView({ executives }: { executives: Exec[] }) {
   }, [execId, load]);
 
   function pick(value: string) {
-    const id = Number(value);
-    if (!id) {
+    if (!value) {
       setExecId(null);
       setTasks([]);
       return;
     }
-    setExecId(id);
-    localStorage.setItem(STORAGE_KEY, String(id));
+    setExecId(value);
+    localStorage.setItem(STORAGE_KEY, value);
   }
 
   async function toggle(task: TaskWithMeeting) {

@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { prisma, type Task } from "@/lib/db";
 import { notFound } from "next/navigation";
 import { MeetingDetail } from "@/components/MeetingDetail";
 
@@ -33,7 +33,7 @@ export default async function MeetingPage({ params }: { params: { id: string } }
   });
 
   const previousUnfinishedCount = previousMeeting
-    ? previousMeeting.tasks.filter((t) => !t.completed).length
+    ? (previousMeeting.tasks as Task[]).filter((t) => !t.completed).length
     : 0;
 
   return (

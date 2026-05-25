@@ -1,4 +1,4 @@
-import { prisma } from "@/lib/db";
+import { prisma, type Task, type MeetingAttendance } from "@/lib/db";
 import { updateMinutesDoc, type MinutesDocData } from "@/lib/appscript";
 
 /**
@@ -23,7 +23,9 @@ export async function buildMinutesPayload(
     orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
   });
 
-  const presentMap = new Map(meeting.attendance.map((a) => [a.executiveId, a.present]));
+  const attendance = meeting.attendance as MeetingAttendance[];
+  const tasks = meeting.tasks as Task[];
+  const presentMap = new Map(attendance.map((a) => [a.executiveId, a.present]));
 
   return {
     title: meeting.title,
@@ -34,7 +36,7 @@ export async function buildMinutesPayload(
       name: e.name,
       role: e.role,
       present: !!presentMap.get(e.id),
-      tasks: meeting.tasks
+      tasks: tasks
         .filter((t) => t.executiveId === e.id)
         .map((t) => ({
           description: t.description,

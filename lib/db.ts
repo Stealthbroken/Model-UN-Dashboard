@@ -431,7 +431,9 @@ async function expandIncludes(
       }
 
       if (subSpec.include) {
-        for (const list of byParent.values()) await expandIncludes(rel.targetMeta, list, subSpec.include);
+        for (const list of Array.from(byParent.values())) {
+          await expandIncludes(rel.targetMeta, list, subSpec.include);
+        }
       }
 
       for (const row of rows) {
@@ -499,16 +501,24 @@ function unwrapCompoundKey(where: Where | undefined): Where | undefined {
 
 // ─── Model factory ─────────────────────────────────────────────────────────
 
+// Result type: the base model fields plus a permissive any-bag for fields
+// added by `include` / `_count` at runtime. Prisma generates conditional
+// types so the include result is precise; replicating that here would be a
+// large amount of type plumbing, so we accept slightly looser typing and
+// match the runtime behaviour: anything you `include` is reachable.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Loose<T> = T & Record<string, any>;
+
 interface ModelOps<T extends { id: string }> {
-  findMany(opts?: QueryOptions): Promise<T[]>;
-  findFirst(opts?: QueryOptions): Promise<T | null>;
-  findUnique(opts: { where: Where; include?: IncludeSpec; select?: Record<string, true> }): Promise<T | null>;
+  findMany(opts?: QueryOptions): Promise<Loose<T>[]>;
+  findFirst(opts?: QueryOptions): Promise<Loose<T> | null>;
+  findUnique(opts: { where: Where; include?: IncludeSpec; select?: Record<string, true> }): Promise<Loose<T> | null>;
   count(opts?: { where?: Where }): Promise<number>;
-  create(opts: { data: Record<string, unknown>; include?: IncludeSpec; select?: Record<string, true> }): Promise<T>;
-  update(opts: { where: Where; data: Record<string, unknown>; select?: Record<string, true>; include?: IncludeSpec }): Promise<T>;
-  delete(opts: { where: Where }): Promise<T>;
+  create(opts: { data: Record<string, unknown>; include?: IncludeSpec; select?: Record<string, true> }): Promise<Loose<T>>;
+  update(opts: { where: Where; data: Record<string, unknown>; select?: Record<string, true>; include?: IncludeSpec }): Promise<Loose<T>>;
+  delete(opts: { where: Where }): Promise<Loose<T>>;
   deleteMany(opts?: { where?: Where }): Promise<{ count: number }>;
-  upsert(opts: { where: Where; create: Record<string, unknown>; update: Record<string, unknown> }): Promise<T>;
+  upsert(opts: { where: Where; create: Record<string, unknown>; update: Record<string, unknown> }): Promise<Loose<T>>;
 }
 
 const MODELS: Partial<Record<ModelKey, ModelOps<{ id: string }>>> = {};
@@ -517,7 +527,7 @@ function model<T extends { id: string }>(modelKey: ModelKey): ModelOps<T> {
   const meta = META[modelKey];
 
   const ops: ModelOps<T> = {
-    async findMany(opts = {}): Promise<T[]> {
+    async findMany(opts = {}): Promise<Loose<T>[]> {
       const where = unwrapCompoundKey(opts.where);
       const { queries, post } = buildWhere(meta, where);
       queries.push(...buildOrder(opts.orderBy));
@@ -533,22 +543,22 @@ function model<T extends { id: string }>(modelKey: ModelKey): ModelOps<T> {
 
       const mapped = docs.map((d) => mapDoc<Record<string, unknown>>(meta, d)!) as Array<Record<string, unknown>>;
       await expandIncludes(modelKey, mapped, opts.include);
-      return mapped.map((r) => applySelect(r, opts.select)) as unknown as T[];
+      return mapped.map((r) => applySelect(r, opts.select)) as unknown as Loose<T>[];
     },
 
-    async findFirst(opts = {}): Promise<T | null> {
+    async findFirst(opts = {}): Promise<Loose<T> | null> {
       const rows = await ops.findMany({ ...opts, take: 1 });
       return rows[0] ?? null;
     },
 
-    async findUnique({ where, include, select }): Promise<T | null> {
+    async findUnique({ where, include, select }): Promise<Loose<T> | null> {
       const unwrapped = unwrapCompoundKey(where)!;
       if ("id" in unwrapped && Object.keys(unwrapped).length === 1 && typeof unwrapped.id === "string") {
         try {
           const doc = await databases.getDocument(DB_ID, meta.collection, unwrapped.id);
           const row = mapDoc<Record<string, unknown>>(meta, doc as AnyDoc)!;
           if (include) await expandIncludes(modelKey, [row], include);
-          return applySelect(row, select) as unknown as T;
+          return applySelect(row, select) as unknown as Loose<T>;
         } catch (err) {
           if ((err as { code?: number }).code === 404) return null;
           throw err;
@@ -567,7 +577,7 @@ function model<T extends { id: string }>(modelKey: ModelKey): ModelOps<T> {
       return (await applyPostFilters(docs, post)).length;
     },
 
-    async create({ data, include, select }): Promise<T> {
+    async create({ data, include, select }): Promise<Loose<T>> {
       const payload = prepareData(meta, data, true);
       if ((meta.dateFields as readonly string[]).includes("createdAt") && payload.createdAt === undefined) {
         payload.createdAt = new Date().toISOString();
@@ -577,10 +587,10 @@ function model<T extends { id: string }>(modelKey: ModelKey): ModelOps<T> {
       const doc = await databases.createDocument(DB_ID, meta.collection, docId, payload);
       const row = mapDoc<Record<string, unknown>>(meta, doc as AnyDoc)!;
       if (include) await expandIncludes(modelKey, [row], include);
-      return applySelect(row, select) as unknown as T;
+      return applySelect(row, select) as unknown as Loose<T>;
     },
 
-    async update({ where, data, select, include }): Promise<T> {
+    async update({ where, data, select, include }): Promise<Loose<T>> {
       const target = await ops.findUnique({ where });
       if (!target) throw new Error(`${meta.collection}: no row matched update where-clause`);
       const payload = prepareData(meta, data, false);
@@ -588,10 +598,10 @@ function model<T extends { id: string }>(modelKey: ModelKey): ModelOps<T> {
       const doc = await databases.updateDocument(DB_ID, meta.collection, target.id, payload);
       const row = mapDoc<Record<string, unknown>>(meta, doc as AnyDoc)!;
       if (include) await expandIncludes(modelKey, [row], include);
-      return applySelect(row, select) as unknown as T;
+      return applySelect(row, select) as unknown as Loose<T>;
     },
 
-    async delete({ where }): Promise<T> {
+    async delete({ where }): Promise<Loose<T>> {
       const target = await ops.findUnique({ where });
       if (!target) throw new Error(`${meta.collection}: no row matched delete where-clause`);
       await cascadeDeleteChildren(modelKey, target.id);
@@ -608,7 +618,7 @@ function model<T extends { id: string }>(modelKey: ModelKey): ModelOps<T> {
       return { count: rows.length };
     },
 
-    async upsert({ where, create, update }): Promise<T> {
+    async upsert({ where, create, update }): Promise<Loose<T>> {
       const existing = await ops.findUnique({ where });
       if (existing) return ops.update({ where: { id: existing.id }, data: update });
       // Bring `where` fields into the create payload so unique constraints

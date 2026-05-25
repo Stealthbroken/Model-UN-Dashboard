@@ -7,13 +7,13 @@ import { RichTextEditor } from "@/components/RichTextEditor";
 import { fmtDate, fmtDateCompact, fmtDateLong, fmtTime } from "@/lib/format";
 
 interface TopicGuide {
-  id: number;
+  id: string;
   filename: string;
   path: string;
 }
 
 interface ClassroomAnnouncement {
-  id: number;
+  id: string;
   body: string;
   scheduledFor: string | null;
   status: string;
@@ -22,7 +22,7 @@ interface ClassroomAnnouncement {
 }
 
 interface Task {
-  id: number;
+  id: string;
   description: string;
   completed: boolean;
   completedAt: string | null;
@@ -30,12 +30,12 @@ interface Task {
   priority: string;
   label: string | null;
   sortOrder: number;
-  meetingId: number;
-  executiveId: number;
+  meetingId: string;
+  executiveId: string;
 }
 
 interface Executive {
-  id: number;
+  id: string;
   name: string;
   role: string;
   email: string | null;
@@ -44,14 +44,14 @@ interface Executive {
 }
 
 interface MeetingAttendance {
-  id: number;
+  id: string;
   present: boolean;
-  meetingId: number;
-  executiveId: number;
+  meetingId: string;
+  executiveId: string;
 }
 
 interface Meeting {
-  id: number;
+  id: string;
   date: string;
   title: string;
   location: string;
@@ -190,13 +190,13 @@ function AttendanceSection({
   executives: Executive[];
   onChange: () => void;
 }) {
-  const [busy, setBusy] = useState<number | null>(null);
+  const [busy, setBusy] = useState<string | null>(null);
 
-  const presentMap = new Map<number, boolean>();
+  const presentMap = new Map<string, boolean>();
   for (const a of meeting.attendance) presentMap.set(a.executiveId, a.present);
   const presentCount = executives.filter((e) => presentMap.get(e.id)).length;
 
-  async function toggle(executiveId: number, present: boolean) {
+  async function toggle(executiveId: string, present: boolean) {
     setBusy(executiveId);
     await fetch(`/api/meetings/${meeting.id}/attendance`, {
       method: "POST",
@@ -261,9 +261,9 @@ function ExecutivesTasksSection({
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
-  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
 
-  function toggleCollapse(execId: number) {
+  function toggleCollapse(execId: string) {
     setCollapsed((cur) => {
       const next = new Set(cur);
       if (next.has(execId)) next.delete(execId);
@@ -272,7 +272,7 @@ function ExecutivesTasksSection({
     });
   }
 
-  const tasksByExec = new Map<number, Task[]>();
+  const tasksByExec = new Map<string, Task[]>();
   for (const t of meeting.tasks) {
     if (!tasksByExec.has(t.executiveId)) tasksByExec.set(t.executiveId, []);
     tasksByExec.get(t.executiveId)!.push(t);
@@ -296,7 +296,7 @@ function ExecutivesTasksSection({
     onChange();
   }
 
-  async function addTask(executiveId: number, payload: NewTaskInput) {
+  async function addTask(executiveId: string, payload: NewTaskInput) {
     if (!payload.description.trim()) return;
     setBusy(`add-${executiveId}`);
     await fetch("/api/tasks", {
@@ -315,7 +315,7 @@ function ExecutivesTasksSection({
     onChange();
   }
 
-  async function editTask(taskId: number, patch: Record<string, unknown>) {
+  async function editTask(taskId: string, patch: Record<string, unknown>) {
     setBusy(`edit-${taskId}`);
     await fetch(`/api/tasks/${taskId}`, {
       method: "PATCH",
@@ -326,7 +326,7 @@ function ExecutivesTasksSection({
     onChange();
   }
 
-  async function deleteTask(taskId: number) {
+  async function deleteTask(taskId: string) {
     setBusy(`del-${taskId}`);
     await fetch(`/api/tasks/${taskId}`, { method: "DELETE" });
     setBusy(null);
@@ -472,9 +472,9 @@ function ExecutiveTaskRow({
   collapsed: boolean;
   onToggleCollapse: () => void;
   onToggle: (t: Task) => void;
-  onAdd: (executiveId: number, payload: NewTaskInput) => void;
-  onEdit: (taskId: number, patch: Record<string, unknown>) => void;
-  onDelete: (id: number) => void;
+  onAdd: (executiveId: string, payload: NewTaskInput) => void;
+  onEdit: (taskId: string, patch: Record<string, unknown>) => void;
+  onDelete: (id: string) => void;
 }) {
   const [desc, setDesc] = useState("");
   const [priority, setPriority] = useState("medium");
@@ -590,8 +590,8 @@ function TaskItem({
   task: Task;
   busy: string | null;
   onToggle: (t: Task) => void;
-  onEdit: (taskId: number, patch: Record<string, unknown>) => void;
-  onDelete: (id: number) => void;
+  onEdit: (taskId: string, patch: Record<string, unknown>) => void;
+  onDelete: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [desc, setDesc] = useState(task.description);
@@ -982,7 +982,7 @@ function TopicGuideSection({
   guide,
   onChange,
 }: {
-  meetingId: number;
+  meetingId: string;
   guide: TopicGuide | null;
   onChange: () => void;
 }) {
@@ -1040,7 +1040,7 @@ function ClassroomSection({
   defaultTime,
   onChange,
 }: {
-  meetingId: number;
+  meetingId: string;
   announcement: ClassroomAnnouncement | null;
   defaultTime: string;
   onChange: () => void;
