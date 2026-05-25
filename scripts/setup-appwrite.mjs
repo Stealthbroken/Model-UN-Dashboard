@@ -365,7 +365,7 @@ async function setupBuckets() {
   await setupCollections();
   await setupIndexes();
   await setupBuckets();
-  console.log("\nDone. Add the env vars listed in .env.example to .env.local and you're ready to go.");
+  console.log("\nDone.");
 })().catch((err) => {
   console.error("\nSetup failed:", err);
   process.exit(1);
