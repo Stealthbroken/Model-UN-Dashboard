@@ -227,6 +227,23 @@ async function setupCollections() {
     databases.createCollection(DB_ID, "settings", "Settings", COLLECTION_PERMS));
 
   await str  ("settings", "value", 2_000, false, "");
+
+  // Topic ─────────────────────────────────────────────────
+  // Brainstorm bank of MUN topic ideas. Status walks
+  // idea → shortlisted → used → archived. `meetingId` is set when "used".
+  await step("collection topics", () =>
+    databases.createCollection(DB_ID, "topics", "Topics", COLLECTION_PERMS));
+
+  await str  ("topics", "title",       300,   true);
+  await str  ("topics", "description", 2_000, false, "");
+  await str  ("topics", "category",    64,    false, "");
+  await str  ("topics", "difficulty",  16,    false, "standard");
+  await str  ("topics", "status",      16,    false, "idea");
+  await str  ("topics", "notes",       4_000, false, "");
+  await str  ("topics", "meetingId",   64);
+  await dt   ("topics", "usedAt");
+  await dt   ("topics", "createdAt",   true);
+  await str  ("topics", "source",      16,    false, "manual");
 }
 
 // ─── 3. Indexes (created after attributes are ready) ───────────────────────
@@ -266,6 +283,12 @@ async function setupIndexes() {
   await index("tasks", "completed",   DatabasesIndexType.Key, ["completed"]);
   await index("tasks", "dueDate",     DatabasesIndexType.Key, ["dueDate"]);
   await index("tasks", "sortOrder",   DatabasesIndexType.Key, ["sortOrder"]);
+
+  await waitForAttributes("topics", ["status", "category", "createdAt", "meetingId"]);
+  await index("topics", "status",     DatabasesIndexType.Key, ["status"]);
+  await index("topics", "category",   DatabasesIndexType.Key, ["category"]);
+  await index("topics", "createdAt",  DatabasesIndexType.Key, ["createdAt"]);
+  await index("topics", "meetingId",  DatabasesIndexType.Key, ["meetingId"]);
 }
 
 // ─── 4. Storage buckets ────────────────────────────────────────────────────

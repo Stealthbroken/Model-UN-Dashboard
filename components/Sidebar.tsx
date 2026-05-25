@@ -17,6 +17,7 @@ const dashboardNav: NavItem[] = [
   { href: "/calendar", icon: "🗓️", label: "Calendar" },
   { href: "/archive", icon: "🗂️", label: "Past Meetings" },
   { href: "/my-tasks", icon: "✅", label: "My Tasks" },
+  { href: "/topics", icon: "💡", label: "Topic Bank" },
   { href: "/stats", icon: "📊", label: "Exec Stats" },
   { href: "/executives", icon: "👥", label: "Sec-Gen Panel" },
   { href: "/instagram", icon: "📷", label: "Instagram" },

@@ -112,6 +112,20 @@ export interface Setting {
   value: string;
 }
 
+export interface Topic {
+  id: string;
+  title: string;
+  description: string;
+  category: string;
+  difficulty: string;          // "intro" | "standard" | "advanced"
+  status: string;              // "idea" | "shortlisted" | "used" | "archived"
+  notes: string;
+  meetingId: string | null;
+  usedAt: Date | null;
+  createdAt: Date;
+  source: string;              // "manual" | "ai" | "curated"
+}
+
 type AnyDoc = Models.Document & Record<string, unknown>;
 
 interface ModelMeta {
@@ -160,6 +174,11 @@ const META = {
     collection: COLLECTIONS.setting,
     dateFields: [],
     defaults: {},
+  },
+  topic: {
+    collection: COLLECTIONS.topic,
+    dateFields: ["usedAt", "createdAt"],
+    defaults: { description: "", category: "", difficulty: "standard", status: "idea", notes: "", source: "manual" },
   },
 } as const satisfies Record<string, ModelMeta>;
 
@@ -699,6 +718,7 @@ MODELS.instagramPost         = model<InstagramPost>("instagramPost")            
 MODELS.executive             = model<Executive>("executive")                         as ModelOps<{ id: string }>;
 MODELS.meetingAttendance     = model<MeetingAttendance>("meetingAttendance")         as ModelOps<{ id: string }>;
 MODELS.task                  = model<Task>("task")                                   as ModelOps<{ id: string }>;
+MODELS.topic                 = model<Topic>("topic")                                 as ModelOps<{ id: string }>;
 
 export const prisma = {
   meeting:               MODELS.meeting               as unknown as ModelOps<Meeting>,
@@ -708,5 +728,6 @@ export const prisma = {
   executive:             MODELS.executive             as unknown as ModelOps<Executive>,
   meetingAttendance:     MODELS.meetingAttendance     as unknown as ModelOps<MeetingAttendance>,
   task:                  MODELS.task                  as unknown as ModelOps<Task>,
+  topic:                 MODELS.topic                 as unknown as ModelOps<Topic>,
   setting:               settingModel,
 };

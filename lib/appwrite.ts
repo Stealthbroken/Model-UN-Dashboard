@@ -36,6 +36,7 @@ export const COLLECTIONS = {
   meetingAttendance:     "meeting_attendances",
   task:                  "tasks",
   setting:               "settings",
+  topic:                 "topics",
 } as const;
 
 export const BUCKETS = {
