@@ -88,10 +88,50 @@ async function waitForAttributes(collectionId, keys) {
   throw new Error(`Timed out waiting for attributes on ${collectionId}: ${keys.join(", ")}`);
 }
 
-// ─── attribute helpers (each is a thin wrapper that swallows 409) ──────────
+// ─── attribute helpers ────────────────────────────────────────────────────
+//
+// Re-runs hit a quirk: Appwrite's row-width check runs BEFORE the duplicate
+// check, so trying to re-create a large string attribute on a collection
+// that's near the row budget fails with HTTP 400 attribute_limit_exceeded
+// instead of the harmless 409 we'd otherwise swallow. To make the script
+// truly idempotent we cache the existing attribute keys per collection at
+// first use and skip create calls for anything that already exists.
+
+const _attrCache = new Map(); // collectionId → Set<string> of existing keys
+
+async function _existingAttrs(coll) {
+  if (!_attrCache.has(coll)) {
+    try {
+      const list = await databases.listAttributes(DB_ID, coll);
+      _attrCache.set(coll, new Set(list.attributes.map((a) => a.key)));
+    } catch {
+      _attrCache.set(coll, new Set());
+    }
+  }
+  return _attrCache.get(coll);
+}
+
+function _rememberAttr(coll, key) {
+  const set = _attrCache.get(coll);
+  if (set) set.add(key);
+}
+
+async function _createIfMissing(coll, key, label, fn) {
+  const existing = await _existingAttrs(coll);
+  if (existing.has(key)) { log(`= ${label} (exists)`); return; }
+  try {
+    await fn();
+    _rememberAttr(coll, key);
+    log(`✓ ${label}`);
+  } catch (err) {
+    if (isAlreadyExists(err)) { _rememberAttr(coll, key); log(`= ${label} (exists)`); return; }
+    console.error(`✗ ${label}: ${err.message || err}`);
+    throw err;
+  }
+}
 
 async function str(coll, key, size, required = false, def = null, array = false) {
-  await step(`${coll}.${key} (string)`, () =>
+  await _createIfMissing(coll, key, `${coll}.${key} (string)`, () =>
     databases.createStringAttribute(DB_ID, coll, key, size, required, def, array));
 }
 async function updateStr(coll, key, required, def, size) {
@@ -104,15 +144,15 @@ async function updateStr(coll, key, required, def, size) {
   }
 }
 async function bool(coll, key, required = false, def = null) {
-  await step(`${coll}.${key} (boolean)`, () =>
+  await _createIfMissing(coll, key, `${coll}.${key} (boolean)`, () =>
     databases.createBooleanAttribute(DB_ID, coll, key, required, def));
 }
 async function int(coll, key, required = false, def = null, min = null, max = null) {
-  await step(`${coll}.${key} (integer)`, () =>
+  await _createIfMissing(coll, key, `${coll}.${key} (integer)`, () =>
     databases.createIntegerAttribute(DB_ID, coll, key, required, min, max, def));
 }
 async function dt(coll, key, required = false, def = null) {
-  await step(`${coll}.${key} (datetime)`, () =>
+  await _createIfMissing(coll, key, `${coll}.${key} (datetime)`, () =>
     databases.createDatetimeAttribute(DB_ID, coll, key, required, def));
 }
 async function index(coll, key, type, attributes, orders = null) {
