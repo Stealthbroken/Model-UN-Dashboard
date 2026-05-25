@@ -7,7 +7,7 @@ import { updateMinutesDoc, type MinutesDocData } from "@/lib/appscript";
  * the doc always reflects current meeting + exec data.
  */
 export async function buildMinutesPayload(
-  meetingId: number,
+  meetingId: string,
 ): Promise<MinutesDocData | null> {
   const meeting = await prisma.meeting.findUnique({
     where: { id: meetingId },
@@ -51,7 +51,7 @@ export async function buildMinutesPayload(
  * Best-effort: re-sync a meeting's minutes Doc. Safe to fire-and-forget — it
  * swallows all errors and no-ops when the meeting has no Doc or isn't exec.
  */
-export async function syncMinutesDoc(meetingId: number): Promise<void> {
+export async function syncMinutesDoc(meetingId: string): Promise<void> {
   try {
     if (!process.env.APPS_SCRIPT_URL) return;
 

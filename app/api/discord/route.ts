@@ -18,7 +18,9 @@ export async function POST(request: NextRequest) {
 
   const data = await request.json();
   const text = typeof data.body === "string" ? data.body.trim() : "";
-  const announcementId = data.announcementId ? Number(data.announcementId) : null;
+  const announcementId = typeof data.announcementId === "string" && data.announcementId
+    ? data.announcementId
+    : null;
 
   if (!text) {
     return NextResponse.json(

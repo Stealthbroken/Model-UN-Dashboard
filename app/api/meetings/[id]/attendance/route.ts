@@ -7,21 +7,21 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const meetingId = parseInt(params.id);
-  if (isNaN(meetingId)) {
+  const meetingId = params.id;
+  if (!meetingId) {
     return NextResponse.json({ error: "Bad meeting id" }, { status: 400 });
   }
 
   const { executiveId, present } = await request.json();
-  if (!executiveId) {
+  if (!executiveId || typeof executiveId !== "string") {
     return NextResponse.json({ error: "executiveId is required" }, { status: 400 });
   }
 
   const record = await prisma.meetingAttendance.upsert({
     where: {
-      meetingId_executiveId: { meetingId, executiveId: Number(executiveId) },
+      meetingId_executiveId: { meetingId, executiveId },
     },
-    create: { meetingId, executiveId: Number(executiveId), present: !!present },
+    create: { meetingId, executiveId, present: !!present },
     update: { present: !!present },
   });
 

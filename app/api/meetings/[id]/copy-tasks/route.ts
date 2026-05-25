@@ -6,8 +6,8 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const id = parseInt(params.id);
-  if (isNaN(id)) return NextResponse.json({ error: "Bad id" }, { status: 400 });
+  const id = params.id;
+  if (!id) return NextResponse.json({ error: "Bad id" }, { status: 400 });
 
   const meeting = await prisma.meeting.findUnique({ where: { id } });
   if (!meeting) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -43,7 +43,7 @@ export async function POST(
     return NextResponse.json({ copied: 0, message: "All unfinished tasks are already on this meeting." });
   }
 
-  const lastOrders = new Map<number, number>();
+  const lastOrders = new Map<string, number>();
   const currentTasks = await prisma.task.findMany({
     where: { meetingId: id },
     select: { executiveId: true, sortOrder: true },

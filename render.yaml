@@ -6,15 +6,25 @@ services:
     runtime: node
     plan: free
     # Free regions: oregon, ohio, virginia, frankfurt, singapore.
-    # Pick the one nearest your Neon database region for lowest latency.
+    # Pick the one nearest your Appwrite region for lowest latency.
     region: oregon
     branch: main
-    buildCommand: npm install && npx prisma db push && npm run build
+    buildCommand: npm install && npm run build
     startCommand: npm run start
     healthCheckPath: /login
     envVars:
       # Paste values for these in the Render dashboard when prompted.
-      - key: DATABASE_URL
+      - key: APPWRITE_ENDPOINT
+        sync: false
+      - key: APPWRITE_PROJECT_ID
+        sync: false
+      - key: APPWRITE_API_KEY
+        sync: false
+      - key: APPWRITE_DATABASE_ID
+        sync: false
+      - key: APPWRITE_BUCKET_TOPIC_GUIDES
+        sync: false
+      - key: APPWRITE_BUCKET_INSTAGRAM_POSTS
         sync: false
       - key: SESSION_PASSWORD
         sync: false

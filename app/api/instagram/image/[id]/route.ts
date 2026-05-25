@@ -1,27 +1,29 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { storage, BUCKETS } from "@/lib/appwrite";
 
 /**
- * Serves an Instagram post's image straight from the database.
+ * Streams an Instagram post's image out of Appwrite Storage.
  *
- * Public (the middleware matcher excludes /api) so that Meta's Graph API
- * can fetch the image when publishing a post.
+ * Public (the middleware matcher excludes /api) so Meta's Graph API can fetch
+ * it when publishing a post.
  */
 export async function GET(
   _request: Request,
   { params }: { params: { id: string } },
 ) {
-  const id = parseInt(params.id);
-  if (isNaN(id)) {
+  if (!params.id) {
     return new NextResponse("Bad id", { status: 400 });
   }
 
-  const post = await prisma.instagramPost.findUnique({ where: { id } });
-  if (!post || !post.imageData) {
+  const post = await prisma.instagramPost.findUnique({ where: { id: params.id } });
+  if (!post || !post.bucketFileId) {
     return new NextResponse("Image not found", { status: 404 });
   }
 
-  return new NextResponse(new Uint8Array(post.imageData), {
+  const buf = await storage.getFileDownload(BUCKETS.instagramPosts, post.bucketFileId);
+  // The SDK returns an ArrayBuffer in Node.
+  return new NextResponse(new Uint8Array(buf), {
     headers: {
       "Content-Type": post.imageMimeType || "image/jpeg",
       "Cache-Control": "private, max-age=60",

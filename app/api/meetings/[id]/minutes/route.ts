@@ -8,8 +8,8 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const id = parseInt(params.id);
-  if (isNaN(id)) return NextResponse.json({ error: "Bad id" }, { status: 400 });
+  const id = params.id;
+  if (!id) return NextResponse.json({ error: "Bad id" }, { status: 400 });
 
   const [payload, settings] = await Promise.all([
     buildMinutesPayload(id),

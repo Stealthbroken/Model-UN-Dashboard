@@ -16,8 +16,8 @@ export async function PATCH(
 ) {
   const denied = await requireSecgen();
   if (denied) return denied;
-  const id = parseInt(params.id);
-  if (isNaN(id)) return NextResponse.json({ error: "Bad id" }, { status: 400 });
+  const id = params.id;
+  if (!id) return NextResponse.json({ error: "Bad id" }, { status: 400 });
 
   const data = await request.json();
   const exec = await prisma.executive.update({
@@ -44,8 +44,8 @@ export async function DELETE(
 ) {
   const denied = await requireSecgen();
   if (denied) return denied;
-  const id = parseInt(params.id);
-  if (isNaN(id)) return NextResponse.json({ error: "Bad id" }, { status: 400 });
+  const id = params.id;
+  if (!id) return NextResponse.json({ error: "Bad id" }, { status: 400 });
   await prisma.executive.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

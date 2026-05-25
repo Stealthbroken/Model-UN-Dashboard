@@ -17,7 +17,7 @@ function parseDueDate(v: unknown): Date | null {
 
 // GET /api/tasks?executiveId=N — all tasks for one executive, with meeting info.
 export async function GET(request: NextRequest) {
-  const executiveId = Number(request.nextUrl.searchParams.get("executiveId"));
+  const executiveId = request.nextUrl.searchParams.get("executiveId");
   if (!executiveId) {
     return NextResponse.json({ error: "executiveId is required" }, { status: 400 });
   }
@@ -33,8 +33,8 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   const data = await request.json();
-  const meetingId = Number(data.meetingId);
-  const executiveId = Number(data.executiveId);
+  const meetingId = typeof data.meetingId === "string" ? data.meetingId : "";
+  const executiveId = typeof data.executiveId === "string" ? data.executiveId : "";
   const description = typeof data.description === "string" ? data.description.trim() : "";
 
   if (!meetingId || !executiveId || !description) {

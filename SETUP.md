@@ -2,13 +2,13 @@
 
 ## Quick Start
 
-The app uses **Postgres**. Get a free database from [Neon](https://neon.tech)
-(see [DEPLOY.md](DEPLOY.md) Step 1), then:
+The app uses **Appwrite** (Database + Storage). Create an Appwrite project
+(cloud or self-hosted), then:
 
 ```bash
 npm install
-# put your Neon connection string in .env.local as DATABASE_URL first
-npx prisma db push
+# put your Appwrite env vars in .env.local first
+npm run appwrite:setup
 npm run dev
 ```
 
@@ -24,7 +24,12 @@ Copy `.env.example` to `.env.local` and fill in:
 
 | Variable | Required | Description |
 |---|---|---|
-| `DATABASE_URL` | Yes | Postgres connection string (free one from Neon — see DEPLOY.md) |
+| `APPWRITE_ENDPOINT` | Yes | Appwrite API endpoint (cloud default is https://cloud.appwrite.io/v1) |
+| `APPWRITE_PROJECT_ID` | Yes | Appwrite project ID |
+| `APPWRITE_API_KEY` | Yes | Server API key with database + storage access |
+| `APPWRITE_DATABASE_ID` | Optional | Appwrite database ID (default: mun_dashboard) |
+| `APPWRITE_BUCKET_TOPIC_GUIDES` | Optional | Topic guide bucket ID (default: topic_guides) |
+| `APPWRITE_BUCKET_INSTAGRAM_POSTS` | Optional | Instagram bucket ID (default: instagram_posts) |
 | `SESSION_PASSWORD` | Yes | Password for the dashboard login |
 | `SECGEN_PASSWORD` | Optional | Separate password that unlocks the Sec-Gen panel (`/executives`). If unset, that panel cannot be unlocked. |
 | `NEXT_PUBLIC_BASE_URL` | For Classroom + Instagram | Public URL of the app (`http://localhost:3000` locally) |

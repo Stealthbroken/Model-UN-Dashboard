@@ -6,7 +6,7 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const id = parseInt(params.id);
+  const id = params.id;
   const data = await request.json();
 
   // Action-style PATCH for archive / unarchive
@@ -48,7 +48,7 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const id = parseInt(params.id);
+  const id = params.id;
   await prisma.meeting.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

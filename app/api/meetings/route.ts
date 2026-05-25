@@ -4,7 +4,7 @@ import { createMinutesDoc } from "@/lib/appscript";
 import { getMinutesDocSettings } from "@/lib/settings";
 import { buildMinutesPayload } from "@/lib/minutes-sync";
 
-async function tryCreateMinutesDoc(meetingId: number): Promise<void> {
+async function tryCreateMinutesDoc(meetingId: string): Promise<void> {
   // Best-effort: never block meeting creation if Apps Script is down/unconfigured
   try {
     if (!process.env.APPS_SCRIPT_URL) return;

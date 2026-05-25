@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { storage, ID, BUCKETS } from "@/lib/appwrite";
+import { InputFile } from "node-appwrite/file";
 
-// Images are stored as bytes in the database (not on disk) so the app works
-// on hosts with an ephemeral/read-only filesystem.
+// Image binaries live in Appwrite Storage; the DB row only keeps a file id and
+// a stable public-API path that Meta's Graph API can fetch.
 const MAX_BYTES = 8 * 1024 * 1024; // 8 MB
 
-// Fields safe to return as JSON — never include the raw `imageData` blob.
 const publicFields = {
   id: true,
   caption: true,
@@ -34,20 +35,23 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({ error: "Caption is required" }, { status: 400 });
   }
 
-  let imageData: Buffer | undefined;
+  let uploadedFileId: string | undefined;
   let imageMimeType: string | undefined;
   if (file && file.size > 0) {
     if (file.size > MAX_BYTES) {
-      return NextResponse.json(
-        { error: "Image too large — 8 MB maximum" },
-        { status: 400 },
-      );
+      return NextResponse.json({ error: "Image too large — 8 MB maximum" }, { status: 400 });
     }
-    imageData = Buffer.from(await file.arrayBuffer());
+    const buf = Buffer.from(await file.arrayBuffer());
+    const uploaded = await storage.createFile(
+      BUCKETS.instagramPosts,
+      ID.unique(),
+      InputFile.fromBuffer(buf, file.name || "instagram.jpg"),
+    );
+    uploadedFileId = uploaded.$id;
     imageMimeType = file.type || "image/jpeg";
   }
 
-  const id = idRaw ? parseInt(idRaw) : null;
+  const id = idRaw && idRaw.trim() ? idRaw.trim() : null;
   let post;
 
   if (id) {
@@ -56,24 +60,27 @@ export async function POST(request: NextRequest) {
     if (existing.status === "posted") {
       return NextResponse.json({ error: "Already posted — cannot edit" }, { status: 400 });
     }
+    // Replacing the image — delete the old file so the bucket doesn't grow forever.
+    if (uploadedFileId && existing.bucketFileId) {
+      await storage.deleteFile(BUCKETS.instagramPosts, existing.bucketFileId).catch(() => {});
+    }
     post = await prisma.instagramPost.update({
       where: { id },
       data: {
         caption,
-        ...(imageData
-          ? { imageData, imageMimeType, imagePath: `/api/instagram/image/${id}` }
+        ...(uploadedFileId
+          ? { bucketFileId: uploadedFileId, imageMimeType, imagePath: `/api/instagram/image/${id}` }
           : {}),
       },
       select: publicFields,
     });
   } else {
     const created = await prisma.instagramPost.create({
-      data: { caption, status: "draft", imageData, imageMimeType },
+      data: { caption, status: "draft", bucketFileId: uploadedFileId, imageMimeType },
     });
-    // imagePath needs the row id, so set it in a follow-up update.
     post = await prisma.instagramPost.update({
       where: { id: created.id },
-      data: imageData ? { imagePath: `/api/instagram/image/${created.id}` } : {},
+      data: uploadedFileId ? { imagePath: `/api/instagram/image/${created.id}` } : {},
       select: publicFields,
     });
   }
@@ -96,6 +103,12 @@ export async function POST(request: NextRequest) {
 
 export async function DELETE(request: NextRequest) {
   const { id } = await request.json();
+  // Best-effort: remove the bucket file too. The DB delete is the source of
+  // truth; a lingering bucket file is harmless if cleanup fails.
+  const existing = await prisma.instagramPost.findUnique({ where: { id } });
+  if (existing?.bucketFileId) {
+    await storage.deleteFile(BUCKETS.instagramPosts, existing.bucketFileId).catch(() => {});
+  }
   await prisma.instagramPost.delete({ where: { id } });
   return NextResponse.json({ ok: true });
 }

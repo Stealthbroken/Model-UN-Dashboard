@@ -5,8 +5,8 @@ import { MeetingDetail } from "@/components/MeetingDetail";
 export const dynamic = "force-dynamic";
 
 export default async function MeetingPage({ params }: { params: { id: string } }) {
-  const id = parseInt(params.id);
-  if (isNaN(id)) notFound();
+  const id = params.id;
+  if (!id) notFound();
 
   const meeting = await prisma.meeting.findUnique({
     where: { id },

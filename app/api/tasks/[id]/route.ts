@@ -19,8 +19,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const id = parseInt(params.id);
-  if (isNaN(id)) return NextResponse.json({ error: "Bad id" }, { status: 400 });
+  const id = params.id;
+  if (!id) return NextResponse.json({ error: "Bad id" }, { status: 400 });
 
   const data = await request.json();
   const patch: {
@@ -61,8 +61,8 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } },
 ) {
-  const id = parseInt(params.id);
-  if (isNaN(id)) return NextResponse.json({ error: "Bad id" }, { status: 400 });
+  const id = params.id;
+  if (!id) return NextResponse.json({ error: "Bad id" }, { status: 400 });
   // Capture the meeting before deleting so the minutes doc can be re-synced.
   const existing = await prisma.task.findUnique({
     where: { id },
