@@ -88,10 +88,50 @@ async function waitForAttributes(collectionId, keys) {
   throw new Error(`Timed out waiting for attributes on ${collectionId}: ${keys.join(", ")}`);
 }
 
-// ─── attribute helpers (each is a thin wrapper that swallows 409) ──────────
+// ─── attribute helpers ────────────────────────────────────────────────────
+//
+// Re-runs hit a quirk: Appwrite's row-width check runs BEFORE the duplicate
+// check, so trying to re-create a large string attribute on a collection
+// that's near the row budget fails with HTTP 400 attribute_limit_exceeded
+// instead of the harmless 409 we'd otherwise swallow. To make the script
+// truly idempotent we cache the existing attribute keys per collection at
+// first use and skip create calls for anything that already exists.
+
+const _attrCache = new Map(); // collectionId → Set<string> of existing keys
+
+async function _existingAttrs(coll) {
+  if (!_attrCache.has(coll)) {
+    try {
+      const list = await databases.listAttributes(DB_ID, coll);
+      _attrCache.set(coll, new Set(list.attributes.map((a) => a.key)));
+    } catch {
+      _attrCache.set(coll, new Set());
+    }
+  }
+  return _attrCache.get(coll);
+}
+
+function _rememberAttr(coll, key) {
+  const set = _attrCache.get(coll);
+  if (set) set.add(key);
+}
+
+async function _createIfMissing(coll, key, label, fn) {
+  const existing = await _existingAttrs(coll);
+  if (existing.has(key)) { log(`= ${label} (exists)`); return; }
+  try {
+    await fn();
+    _rememberAttr(coll, key);
+    log(`✓ ${label}`);
+  } catch (err) {
+    if (isAlreadyExists(err)) { _rememberAttr(coll, key); log(`= ${label} (exists)`); return; }
+    console.error(`✗ ${label}: ${err.message || err}`);
+    throw err;
+  }
+}
 
 async function str(coll, key, size, required = false, def = null, array = false) {
-  await step(`${coll}.${key} (string)`, () =>
+  await _createIfMissing(coll, key, `${coll}.${key} (string)`, () =>
     databases.createStringAttribute(DB_ID, coll, key, size, required, def, array));
 }
 async function updateStr(coll, key, required, def, size) {
@@ -104,15 +144,15 @@ async function updateStr(coll, key, required, def, size) {
   }
 }
 async function bool(coll, key, required = false, def = null) {
-  await step(`${coll}.${key} (boolean)`, () =>
+  await _createIfMissing(coll, key, `${coll}.${key} (boolean)`, () =>
     databases.createBooleanAttribute(DB_ID, coll, key, required, def));
 }
 async function int(coll, key, required = false, def = null, min = null, max = null) {
-  await step(`${coll}.${key} (integer)`, () =>
+  await _createIfMissing(coll, key, `${coll}.${key} (integer)`, () =>
     databases.createIntegerAttribute(DB_ID, coll, key, required, min, max, def));
 }
 async function dt(coll, key, required = false, def = null) {
-  await step(`${coll}.${key} (datetime)`, () =>
+  await _createIfMissing(coll, key, `${coll}.${key} (datetime)`, () =>
     databases.createDatetimeAttribute(DB_ID, coll, key, required, def));
 }
 async function index(coll, key, type, attributes, orders = null) {
@@ -227,6 +267,23 @@ async function setupCollections() {
     databases.createCollection(DB_ID, "settings", "Settings", COLLECTION_PERMS));
 
   await str  ("settings", "value", 2_000, false, "");
+
+  // Topic ─────────────────────────────────────────────────
+  // Brainstorm bank of MUN topic ideas. Status walks
+  // idea → shortlisted → used → archived. `meetingId` is set when "used".
+  await step("collection topics", () =>
+    databases.createCollection(DB_ID, "topics", "Topics", COLLECTION_PERMS));
+
+  await str  ("topics", "title",       300,   true);
+  await str  ("topics", "description", 2_000, false, "");
+  await str  ("topics", "category",    64,    false, "");
+  await str  ("topics", "difficulty",  16,    false, "standard");
+  await str  ("topics", "status",      16,    false, "idea");
+  await str  ("topics", "notes",       4_000, false, "");
+  await str  ("topics", "meetingId",   64);
+  await dt   ("topics", "usedAt");
+  await dt   ("topics", "createdAt",   true);
+  await str  ("topics", "source",      16,    false, "manual");
 }
 
 // ─── 3. Indexes (created after attributes are ready) ───────────────────────
@@ -266,6 +323,12 @@ async function setupIndexes() {
   await index("tasks", "completed",   DatabasesIndexType.Key, ["completed"]);
   await index("tasks", "dueDate",     DatabasesIndexType.Key, ["dueDate"]);
   await index("tasks", "sortOrder",   DatabasesIndexType.Key, ["sortOrder"]);
+
+  await waitForAttributes("topics", ["status", "category", "createdAt", "meetingId"]);
+  await index("topics", "status",     DatabasesIndexType.Key, ["status"]);
+  await index("topics", "category",   DatabasesIndexType.Key, ["category"]);
+  await index("topics", "createdAt",  DatabasesIndexType.Key, ["createdAt"]);
+  await index("topics", "meetingId",  DatabasesIndexType.Key, ["meetingId"]);
 }
 
 // ─── 4. Storage buckets ────────────────────────────────────────────────────
@@ -302,7 +365,7 @@ async function setupBuckets() {
   await setupCollections();
   await setupIndexes();
   await setupBuckets();
-  console.log("\nDone. Add the env vars listed in .env.example to .env.local and you're ready to go.");
+  console.log("\nDone.");
 })().catch((err) => {
   console.error("\nSetup failed:", err);
   process.exit(1);
