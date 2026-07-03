@@ -69,6 +69,37 @@ interface Meeting {
   attendance: MeetingAttendance[];
 }
 
+/**
+ * All mutations in this component update local state immediately (optimistic)
+ * and roll back on failure. Nothing calls router.refresh() — a full RSC
+ * re-render against Appwrite Cloud costs 1–3s and made every click feel slow.
+ */
+async function api<T = unknown>(
+  url: string,
+  init?: RequestInit,
+): Promise<{ ok: boolean; data: T | null; error: string | null }> {
+  try {
+    const res = await fetch(url, init);
+    const data = (await res.json().catch(() => null)) as T | null;
+    if (!res.ok) {
+      const msg =
+        (data as { error?: string } | null)?.error || `Request failed (${res.status})`;
+      return { ok: false, data, error: msg };
+    }
+    return { ok: true, data, error: null };
+  } catch {
+    return { ok: false, data: null, error: "Network error — check your connection." };
+  }
+}
+
+function jsonInit(method: string, body: unknown): RequestInit {
+  return {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  };
+}
+
 function toLocalInputValue(date: Date): string {
   const pad = (n: number) => String(n).padStart(2, "0");
   return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`;
@@ -120,9 +151,30 @@ export function MeetingDetail({
   executives: Executive[];
   previousUnfinishedCount: number;
 }) {
-  const router = useRouter();
   const meetingDate = new Date(meeting.date);
-  const isExec = meeting.type === "exec";
+
+  // Local mirrors of everything the user can mutate on this page.
+  const [info, setInfo] = useState({
+    title: meeting.title,
+    location: meeting.location,
+    type: meeting.type,
+    agenda: meeting.agenda,
+    notes: meeting.notes,
+    responsibleEmail: meeting.responsibleEmail,
+    archivedAt: meeting.archivedAt,
+  });
+  const [tasks, setTasks] = useState<Task[]>(meeting.tasks);
+  const [attendance, setAttendance] = useState<MeetingAttendance[]>(meeting.attendance);
+  const [guide, setGuide] = useState<TopicGuide | null>(meeting.topicGuide);
+  const [announcement, setAnnouncement] = useState<ClassroomAnnouncement | null>(
+    meeting.announcement,
+  );
+  const [minutes, setMinutes] = useState({
+    url: meeting.minutesDocUrl,
+    createdAt: meeting.minutesDocCreatedAt,
+  });
+
+  const isExec = info.type === "exec";
 
   return (
     <div className="max-w-5xl">
@@ -132,47 +184,45 @@ export function MeetingDetail({
       </Link>
 
       {/* Meeting Header */}
-      <MeetingHeader meeting={meeting} onUpdate={() => router.refresh()} />
+      <MeetingHeader meetingId={meeting.id} date={meetingDate} info={info} onInfoChange={setInfo} />
 
       {isExec ? (
         <>
           {/* Minutes Doc — shown first */}
           <div className="mt-6">
-            <MinutesDocSection meeting={meeting} onChange={() => router.refresh()} />
+            <MinutesDocSection meetingId={meeting.id} minutes={minutes} onChange={setMinutes} />
           </div>
 
           {/* Attendance */}
           <div className="mt-6">
             <AttendanceSection
-              meeting={meeting}
+              meetingId={meeting.id}
               executives={executives}
-              onChange={() => router.refresh()}
+              attendance={attendance}
+              onChange={setAttendance}
             />
           </div>
 
           {/* Executives & Tasks */}
           <div className="mt-6">
             <ExecutivesTasksSection
-              meeting={meeting}
+              meetingId={meeting.id}
               executives={executives}
+              tasks={tasks}
+              onChange={setTasks}
               previousUnfinishedCount={previousUnfinishedCount}
-              onChange={() => router.refresh()}
             />
           </div>
         </>
       ) : (
         /* Regular meeting: Topic Guide + Classroom Announcement */
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-          <TopicGuideSection
-            meetingId={meeting.id}
-            guide={meeting.topicGuide}
-            onChange={() => router.refresh()}
-          />
+          <TopicGuideSection meetingId={meeting.id} guide={guide} onChange={setGuide} />
           <ClassroomSection
             meetingId={meeting.id}
-            announcement={meeting.announcement}
+            announcement={announcement}
+            onChange={setAnnouncement}
             defaultTime={defaultAnnouncementTime(meetingDate)}
-            onChange={() => router.refresh()}
           />
         </div>
       )}
@@ -182,29 +232,44 @@ export function MeetingDetail({
 
 /* ───────── Attendance Section ───────── */
 function AttendanceSection({
-  meeting,
+  meetingId,
   executives,
+  attendance,
   onChange,
 }: {
-  meeting: Meeting;
+  meetingId: string;
   executives: Executive[];
-  onChange: () => void;
+  attendance: MeetingAttendance[];
+  onChange: React.Dispatch<React.SetStateAction<MeetingAttendance[]>>;
 }) {
-  const [busy, setBusy] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   const presentMap = new Map<string, boolean>();
-  for (const a of meeting.attendance) presentMap.set(a.executiveId, a.present);
+  for (const a of attendance) presentMap.set(a.executiveId, a.present);
   const presentCount = executives.filter((e) => presentMap.get(e.id)).length;
 
   async function toggle(executiveId: string, present: boolean) {
-    setBusy(executiveId);
-    await fetch(`/api/meetings/${meeting.id}/attendance`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ executiveId, present }),
+    setError(null);
+    const prev = attendance;
+    onChange((cur) => {
+      const existing = cur.find((a) => a.executiveId === executiveId);
+      if (existing) {
+        return cur.map((a) => (a.executiveId === executiveId ? { ...a, present } : a));
+      }
+      return [...cur, { id: `tmp-${executiveId}`, present, meetingId, executiveId }];
     });
-    setBusy(null);
-    onChange();
+    const res = await api<MeetingAttendance>(
+      `/api/meetings/${meetingId}/attendance`,
+      jsonInit("POST", { executiveId, present }),
+    );
+    if (!res.ok) {
+      onChange(prev);
+      setError(res.error);
+    } else if (res.data) {
+      // Swap any temp row for the server row so later toggles hit the real id.
+      const record = res.data;
+      onChange((cur) => cur.map((a) => (a.executiveId === executiveId ? record : a)));
+    }
   }
 
   return (
@@ -215,6 +280,7 @@ function AttendanceSection({
           {presentCount}/{executives.length} present
         </span>
       </div>
+      {error && <p className="text-xs text-red-600 mb-2">{error}</p>}
       {executives.length === 0 ? (
         <p className="text-sm text-gray-400">No executives on the roster.</p>
       ) : (
@@ -229,8 +295,7 @@ function AttendanceSection({
                 </span>
                 <button
                   onClick={() => toggle(e.id, !present)}
-                  disabled={busy === e.id}
-                  className={`px-3 py-1 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 ${
+                  className={`px-3 py-1 rounded-lg text-xs font-medium border transition-colors ${
                     present
                       ? "bg-green-50 border-green-300 text-green-700"
                       : "bg-gray-50 border-gray-300 text-gray-500"
@@ -249,19 +314,24 @@ function AttendanceSection({
 
 /* ───────── Executives & Tasks Section ───────── */
 function ExecutivesTasksSection({
-  meeting,
+  meetingId,
   executives,
-  previousUnfinishedCount,
+  tasks,
   onChange,
+  previousUnfinishedCount,
 }: {
-  meeting: Meeting;
+  meetingId: string;
   executives: Executive[];
+  tasks: Task[];
+  onChange: React.Dispatch<React.SetStateAction<Task[]>>;
   previousUnfinishedCount: number;
-  onChange: () => void;
 }) {
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // The count from the server is a snapshot; once copied, don't offer again.
+  const [copyCount, setCopyCount] = useState(previousUnfinishedCount);
 
   function toggleCollapse(execId: string) {
     setCollapsed((cur) => {
@@ -273,78 +343,113 @@ function ExecutivesTasksSection({
   }
 
   const tasksByExec = new Map<string, Task[]>();
-  for (const t of meeting.tasks) {
+  for (const t of tasks) {
     if (!tasksByExec.has(t.executiveId)) tasksByExec.set(t.executiveId, []);
     tasksByExec.get(t.executiveId)!.push(t);
   }
 
   // Group orphans (tasks whose exec has been deactivated/deleted)
   const activeExecIds = new Set(executives.map((e) => e.id));
-  const orphanTasks = meeting.tasks.filter((t) => !activeExecIds.has(t.executiveId));
+  const orphanTasks = tasks.filter((t) => !activeExecIds.has(t.executiveId));
 
-  const totalTasks = meeting.tasks.length;
-  const completedTasks = meeting.tasks.filter((t) => t.completed).length;
+  const totalTasks = tasks.length;
+  const completedTasks = tasks.filter((t) => t.completed).length;
 
   async function toggleTask(task: Task) {
-    setBusy(`toggle-${task.id}`);
-    await fetch(`/api/tasks/${task.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ completed: !task.completed }),
-    });
-    setBusy(null);
-    onChange();
+    setError(null);
+    const next = !task.completed;
+    const prev = tasks;
+    onChange((cur) =>
+      cur.map((t) =>
+        t.id === task.id
+          ? { ...t, completed: next, completedAt: next ? new Date().toISOString() : null }
+          : t,
+      ),
+    );
+    const res = await api(`/api/tasks/${task.id}`, jsonInit("PATCH", { completed: next }));
+    if (!res.ok) {
+      onChange(prev);
+      setError(res.error);
+    }
   }
 
   async function addTask(executiveId: string, payload: NewTaskInput) {
     if (!payload.description.trim()) return;
+    setError(null);
     setBusy(`add-${executiveId}`);
-    await fetch("/api/tasks", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        meetingId: meeting.id,
+    const res = await api<Task>(
+      "/api/tasks",
+      jsonInit("POST", {
+        meetingId,
         executiveId,
         description: payload.description,
         priority: payload.priority,
         dueDate: payload.dueDate || null,
         label: payload.label || null,
       }),
-    });
+    );
     setBusy(null);
-    onChange();
+    if (!res.ok || !res.data) {
+      setError(res.error || "Could not add the task.");
+      return false;
+    }
+    const created = res.data;
+    onChange((cur) => [...cur, created]);
+    return true;
   }
 
-  async function editTask(taskId: string, patch: Record<string, unknown>) {
-    setBusy(`edit-${taskId}`);
-    await fetch(`/api/tasks/${taskId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
-    setBusy(null);
-    onChange();
+  async function editTask(taskId: string, patch: Partial<Task>) {
+    setError(null);
+    const prev = tasks;
+    onChange((cur) => cur.map((t) => (t.id === taskId ? { ...t, ...patch } : t)));
+    const res = await api<Task>(`/api/tasks/${taskId}`, jsonInit("PATCH", patch));
+    if (!res.ok) {
+      onChange(prev);
+      setError(res.error);
+    } else if (res.data) {
+      // Adopt the server's normalized values (parsed dates, trimmed strings).
+      const saved = res.data;
+      onChange((cur) => cur.map((t) => (t.id === taskId ? { ...t, ...saved } : t)));
+    }
   }
 
   async function deleteTask(taskId: string) {
-    setBusy(`del-${taskId}`);
-    await fetch(`/api/tasks/${taskId}`, { method: "DELETE" });
-    setBusy(null);
-    onChange();
+    setError(null);
+    const prev = tasks;
+    onChange((cur) => cur.filter((t) => t.id !== taskId));
+    const res = await api(`/api/tasks/${taskId}`, { method: "DELETE" });
+    if (!res.ok) {
+      onChange(prev);
+      setError(res.error);
+    }
   }
 
   async function copyFromLast() {
     setBusy("copy");
     setMessage(null);
-    const res = await fetch(`/api/meetings/${meeting.id}/copy-tasks`, { method: "POST" });
-    const data = await res.json();
-    setMessage(
-      data.copied
-        ? `Copied ${data.copied} unfinished task${data.copied === 1 ? "" : "s"} from the last meeting.`
-        : data.message || "Nothing to copy.",
+    setError(null);
+    const res = await api<{ copied: number; message?: string }>(
+      `/api/meetings/${meetingId}/copy-tasks`,
+      { method: "POST" },
     );
     setBusy(null);
-    onChange();
+    if (!res.ok || !res.data) {
+      setError(res.error || "Copy failed.");
+      return;
+    }
+    const { copied, message: note } = res.data;
+    setMessage(
+      copied
+        ? `Copied ${copied} unfinished task${copied === 1 ? "" : "s"} from the last meeting.`
+        : note || "Nothing to copy.",
+    );
+    if (copied) {
+      setCopyCount(0);
+      // Fetch nothing extra — the response doesn't include rows, so pull the
+      // authoritative list once. Still one round trip instead of a page render.
+      const refreshed = await api<Task[]>(`/api/tasks?meetingId=${meetingId}`);
+      if (refreshed.ok && Array.isArray(refreshed.data)) onChange(refreshed.data);
+    }
   }
 
   return (
@@ -371,18 +476,16 @@ function ExecutivesTasksSection({
               {collapsed.size === executives.length ? "Expand all" : "Collapse all"}
             </button>
           )}
-          <button
-            onClick={copyFromLast}
-            disabled={busy === "copy" || previousUnfinishedCount === 0}
-            className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
-            title={
-              previousUnfinishedCount === 0
-                ? "No unfinished tasks on the previous meeting."
-                : `Copy ${previousUnfinishedCount} unfinished task(s) from the previous meeting`
-            }
-          >
-            {busy === "copy" ? "Copying..." : `↻ Copy unfinished (${previousUnfinishedCount})`}
-          </button>
+          {copyCount > 0 && (
+            <button
+              onClick={copyFromLast}
+              disabled={busy === "copy"}
+              className="px-3 py-1.5 text-xs border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
+              title={`Copy ${copyCount} unfinished task(s) from the previous meeting`}
+            >
+              {busy === "copy" ? "Copying..." : `↻ Copy unfinished (${copyCount})`}
+            </button>
+          )}
           <Link
             href="/executives"
             className="text-xs text-gray-500 hover:underline"
@@ -392,9 +495,8 @@ function ExecutivesTasksSection({
         </div>
       </div>
 
-      {message && (
-        <p className="text-xs text-green-600 mb-2">{message}</p>
-      )}
+      {message && <p className="text-xs text-green-600 mb-2">{message}</p>}
+      {error && <p className="text-xs text-red-600 mb-2">{error}</p>}
 
       {executives.length === 0 ? (
         <div className="text-sm text-gray-500 border border-dashed border-gray-200 rounded-lg p-4 text-center">
@@ -435,7 +537,6 @@ function ExecutivesTasksSection({
                   type="checkbox"
                   checked={t.completed}
                   onChange={() => toggleTask(t)}
-                  disabled={busy === `toggle-${t.id}`}
                 />
                 <span className={t.completed ? "line-through text-gray-400" : "text-gray-700"}>
                   {t.description}
@@ -472,8 +573,8 @@ function ExecutiveTaskRow({
   collapsed: boolean;
   onToggleCollapse: () => void;
   onToggle: (t: Task) => void;
-  onAdd: (executiveId: string, payload: NewTaskInput) => void;
-  onEdit: (taskId: string, patch: Record<string, unknown>) => void;
+  onAdd: (executiveId: string, payload: NewTaskInput) => Promise<boolean | undefined>;
+  onEdit: (taskId: string, patch: Partial<Task>) => void;
   onDelete: (id: string) => void;
 }) {
   const [desc, setDesc] = useState("");
@@ -482,14 +583,16 @@ function ExecutiveTaskRow({
   const [label, setLabel] = useState("");
   const doneCount = tasks.filter((t) => t.completed).length;
 
-  function submit(e: React.FormEvent) {
+  async function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!desc.trim()) return;
-    onAdd(exec.id, { description: desc, priority, dueDate, label });
-    setDesc("");
-    setPriority("medium");
-    setDueDate("");
-    setLabel("");
+    const added = await onAdd(exec.id, { description: desc, priority, dueDate, label });
+    if (added) {
+      setDesc("");
+      setPriority("medium");
+      setDueDate("");
+      setLabel("");
+    }
   }
 
   const openCount = tasks.length - doneCount;
@@ -526,7 +629,6 @@ function ExecutiveTaskRow({
                 <TaskItem
                   key={t.id}
                   task={t}
-                  busy={busy}
                   onToggle={onToggle}
                   onEdit={onEdit}
                   onDelete={onDelete}
@@ -582,15 +684,13 @@ function ExecutiveTaskRow({
 
 function TaskItem({
   task,
-  busy,
   onToggle,
   onEdit,
   onDelete,
 }: {
   task: Task;
-  busy: string | null;
   onToggle: (t: Task) => void;
-  onEdit: (taskId: string, patch: Record<string, unknown>) => void;
+  onEdit: (taskId: string, patch: Partial<Task>) => void;
   onDelete: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
@@ -661,7 +761,6 @@ function TaskItem({
         type="checkbox"
         checked={task.completed}
         onChange={() => onToggle(task)}
-        disabled={busy === `toggle-${task.id}`}
         className="rounded"
       />
       <span
@@ -708,17 +807,19 @@ function TaskItem({
 
 /* ───────── Minutes Doc Section ───────── */
 function MinutesDocSection({
-  meeting,
+  meetingId,
+  minutes,
   onChange,
 }: {
-  meeting: Meeting;
-  onChange: () => void;
+  meetingId: string;
+  minutes: { url: string | null; createdAt: string | null };
+  onChange: (m: { url: string | null; createdAt: string | null }) => void;
 }) {
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function regenerate() {
-    if (meeting.minutesDocUrl) {
+    if (minutes.url) {
       if (
         !confirm(
           "Create a brand-new minutes doc? The existing doc will be left where it is in Drive — this dashboard will just point to the new one.",
@@ -728,13 +829,16 @@ function MinutesDocSection({
     }
     setCreating(true);
     setError(null);
-    const res = await fetch(`/api/meetings/${meeting.id}/minutes`, { method: "POST" });
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      setError(data.error || "Failed to create minutes doc.");
-    }
+    const res = await api<{ ok: boolean; docUrl?: string }>(
+      `/api/meetings/${meetingId}/minutes`,
+      { method: "POST" },
+    );
     setCreating(false);
-    onChange();
+    if (!res.ok || !res.data?.ok) {
+      setError(res.error || "Failed to create minutes doc.");
+      return;
+    }
+    onChange({ url: res.data.docUrl ?? null, createdAt: new Date().toISOString() });
   }
 
   return (
@@ -743,27 +847,26 @@ function MinutesDocSection({
         <h3 className="font-semibold text-gray-900">Meeting Minutes Doc</h3>
         <span
           className={`text-xs font-medium px-2 py-0.5 rounded-full ${
-            meeting.minutesDocUrl ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"
+            minutes.url ? "bg-green-100 text-green-800" : "bg-amber-100 text-amber-800"
           }`}
         >
-          {meeting.minutesDocUrl ? "ready" : "not created"}
+          {minutes.url ? "ready" : "not created"}
         </span>
       </div>
 
-      {meeting.minutesDocUrl ? (
+      {minutes.url ? (
         <div className="space-y-2">
           <a
-            href={meeting.minutesDocUrl}
+            href={minutes.url}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 text-primary-600 hover:underline text-sm font-medium"
           >
             📄 Open minutes doc in Google Docs
           </a>
-          {meeting.minutesDocCreatedAt && (
+          {minutes.createdAt && (
             <p className="text-xs text-gray-500">
-              Created {fmtDate(meeting.minutesDocCreatedAt)} ·{" "}
-              {fmtTime(meeting.minutesDocCreatedAt)}
+              Created {fmtDate(minutes.createdAt)} · {fmtTime(minutes.createdAt)}
             </p>
           )}
           <button
@@ -796,38 +899,76 @@ function MinutesDocSection({
 }
 
 /* ───────────── Meeting Header ───────────── */
-function MeetingHeader({ meeting, onUpdate }: { meeting: Meeting; onUpdate: () => void }) {
+interface MeetingInfo {
+  title: string;
+  location: string;
+  type: string;
+  agenda: string | null;
+  notes: string | null;
+  responsibleEmail: string | null;
+  archivedAt: string | null;
+}
+
+function MeetingHeader({
+  meetingId,
+  date,
+  info,
+  onInfoChange,
+}: {
+  meetingId: string;
+  date: Date;
+  info: MeetingInfo;
+  onInfoChange: (info: MeetingInfo) => void;
+}) {
   const router = useRouter();
   const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState({
-    title: meeting.title,
-    location: meeting.location,
-    type: meeting.type,
-    agenda: meeting.agenda || "",
-    notes: meeting.notes || "",
-    responsibleEmail: meeting.responsibleEmail || "",
+    title: info.title,
+    location: info.location,
+    type: info.type,
+    agenda: info.agenda || "",
+    notes: info.notes || "",
+    responsibleEmail: info.responsibleEmail || "",
   });
-  const date = new Date(meeting.date);
-  const isArchived = !!meeting.archivedAt;
-  const isExec = meeting.type === "exec";
+  const isArchived = !!info.archivedAt;
+  const isExec = info.type === "exec";
 
   async function save() {
-    await fetch(`/api/meetings/${meeting.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+    setSaving(true);
+    setError(null);
+    const res = await api(`/api/meetings/${meetingId}`, jsonInit("PATCH", form));
+    setSaving(false);
+    if (!res.ok) {
+      setError(res.error);
+      return;
+    }
+    onInfoChange({
+      ...info,
+      title: form.title,
+      location: form.location,
+      type: form.type,
+      agenda: form.agenda || null,
+      notes: form.notes || null,
+      responsibleEmail: form.responsibleEmail || null,
     });
     setEditing(false);
-    onUpdate();
   }
 
   async function archiveToggle() {
-    await fetch(`/api/meetings/${meeting.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: isArchived ? "unarchive" : "archive" }),
-    });
-    onUpdate();
+    setError(null);
+    const nextArchivedAt = isArchived ? null : new Date().toISOString();
+    const prev = info.archivedAt;
+    onInfoChange({ ...info, archivedAt: nextArchivedAt });
+    const res = await api(
+      `/api/meetings/${meetingId}`,
+      jsonInit("PATCH", { action: isArchived ? "unarchive" : "archive" }),
+    );
+    if (!res.ok) {
+      onInfoChange({ ...info, archivedAt: prev });
+      setError(res.error);
+    }
   }
 
   async function remove() {
@@ -837,8 +978,9 @@ function MeetingHeader({ meeting, onUpdate }: { meeting: Meeting; onUpdate: () =
       )
     )
       return;
-    const res = await fetch(`/api/meetings/${meeting.id}`, { method: "DELETE" });
+    const res = await api(`/api/meetings/${meetingId}`, { method: "DELETE" });
     if (res.ok) router.push("/meetings");
+    else setError(res.error);
   }
 
   return (
@@ -863,15 +1005,16 @@ function MeetingHeader({ meeting, onUpdate }: { meeting: Meeting; onUpdate: () =
             )}
           </div>
           <p className="text-gray-500 mt-1">
-            {fmtTime(date)} • {meeting.location}
+            {fmtTime(date)} • {info.location}
           </p>
         </div>
         <div className="flex gap-2 flex-wrap justify-end">
           <button
             onClick={() => (editing ? save() : setEditing(true))}
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            disabled={saving}
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors disabled:opacity-50"
           >
-            {editing ? "Save" : "Edit"}
+            {editing ? (saving ? "Saving..." : "Save") : "Edit"}
           </button>
           <button
             onClick={archiveToggle}
@@ -887,6 +1030,8 @@ function MeetingHeader({ meeting, onUpdate }: { meeting: Meeting; onUpdate: () =
           </button>
         </div>
       </div>
+
+      {error && <p className="text-xs text-red-600 mb-3">{error}</p>}
 
       {editing ? (
         <div className="space-y-3">
@@ -952,22 +1097,22 @@ function MeetingHeader({ meeting, onUpdate }: { meeting: Meeting; onUpdate: () =
         </div>
       ) : (
         <>
-          {meeting.agenda && (
+          {info.agenda && (
             <div className="mt-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Agenda</p>
-              <p className="text-gray-700 whitespace-pre-wrap text-sm">{meeting.agenda}</p>
+              <p className="text-gray-700 whitespace-pre-wrap text-sm">{info.agenda}</p>
             </div>
           )}
-          {meeting.notes && (
+          {info.notes && (
             <div className="mt-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Notes</p>
-              <p className="text-gray-700 whitespace-pre-wrap text-sm">{meeting.notes}</p>
+              <p className="text-gray-700 whitespace-pre-wrap text-sm">{info.notes}</p>
             </div>
           )}
-          {meeting.responsibleEmail && (
+          {info.responsibleEmail && (
             <div className="mt-3">
               <p className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-1">Responsible</p>
-              <p className="text-gray-700 text-sm">{meeting.responsibleEmail}</p>
+              <p className="text-gray-700 text-sm">{info.responsibleEmail}</p>
             </div>
           )}
         </>
@@ -984,34 +1129,43 @@ function TopicGuideSection({
 }: {
   meetingId: string;
   guide: TopicGuide | null;
-  onChange: () => void;
+  onChange: (g: TopicGuide | null) => void;
 }) {
   const [uploading, setUploading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     setUploading(true);
+    setError(null);
     const formData = new FormData();
     formData.append("file", file);
     formData.append("meetingId", String(meetingId));
-    await fetch("/api/topic-guide", { method: "POST", body: formData });
+    const res = await api<TopicGuide>("/api/topic-guide", { method: "POST", body: formData });
     setUploading(false);
-    onChange();
+    if (!res.ok || !res.data) {
+      setError(res.error || "Upload failed.");
+      return;
+    }
+    onChange(res.data);
   }
 
   async function handleDelete() {
     if (!guide) return;
-    await fetch("/api/topic-guide", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: guide.id }),
-    });
-    onChange();
+    setError(null);
+    const prev = guide;
+    onChange(null);
+    const res = await api("/api/topic-guide", jsonInit("DELETE", { id: guide.id }));
+    if (!res.ok) {
+      onChange(prev);
+      setError(res.error);
+    }
   }
 
   return (
     <Section title="Topic Guide" badge={guide ? "ready" : "missing"}>
+      {error && <p className="text-xs text-red-600 mb-2">{error}</p>}
       {guide ? (
         <div className="space-y-3">
           <div className="bg-gray-50 rounded-lg p-3">
@@ -1037,13 +1191,13 @@ function TopicGuideSection({
 function ClassroomSection({
   meetingId,
   announcement,
-  defaultTime,
   onChange,
+  defaultTime,
 }: {
   meetingId: string;
   announcement: ClassroomAnnouncement | null;
+  onChange: (a: ClassroomAnnouncement | null) => void;
   defaultTime: string;
-  onChange: () => void;
 }) {
   const [body, setBody] = useState(announcement?.body || "");
   const [scheduledFor, setScheduledFor] = useState(
@@ -1060,21 +1214,22 @@ function ClassroomSection({
   async function save(action: "draft" | "schedule") {
     setSaving(action);
     setMessage(null);
-    const res = await fetch("/api/classroom", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const res = await api<ClassroomAnnouncement>(
+      "/api/classroom",
+      jsonInit("POST", {
         meetingId,
         body,
         scheduledFor: action === "schedule" ? scheduledFor : null,
         status: action === "schedule" ? "pending" : "draft",
       }),
-    });
-    const data = await res.json();
-    if (data.error) setMessage(`Error: ${data.error}`);
-    else setMessage(action === "schedule" ? "Scheduled." : "Draft saved.");
+    );
     setSaving(null);
-    onChange();
+    if (!res.ok || !res.data) {
+      setMessage(`Error: ${res.error || "Save failed"}`);
+      return;
+    }
+    onChange(res.data);
+    setMessage(action === "schedule" ? "Scheduled." : "Draft saved.");
   }
 
   async function remove() {
@@ -1083,31 +1238,33 @@ function ClassroomSection({
       ? "Remove this from the dashboard? The post will stay live in Google Classroom — this only frees up the slot here so you can plan a new one."
       : "Delete this announcement?";
     if (!confirm(msg)) return;
-    await fetch("/api/classroom", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: announcement.id }),
-    });
+    const res = await api("/api/classroom", jsonInit("DELETE", { id: announcement.id }));
+    if (!res.ok) {
+      setMessage(`Error: ${res.error || "Delete failed"}`);
+      return;
+    }
     setBody("");
-    onChange();
+    setScheduledFor(defaultTime);
+    setMessage(null);
+    onChange(null);
   }
 
   async function mirrorToDiscord() {
     setMirroring(true);
     setMessage(null);
-    const res = await fetch("/api/discord", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body, announcementId: announcement?.id ?? null }),
-    });
-    const data = await res.json();
-    if (!res.ok || data.error) {
-      setMessage(`Error: ${data.error || "Discord mirror failed"}`);
-    } else {
-      setMessage("Mirrored to Discord.");
-    }
+    const res = await api<{ ok: boolean; discordSentAt: string | null }>(
+      "/api/discord",
+      jsonInit("POST", { body, announcementId: announcement?.id ?? null }),
+    );
     setMirroring(false);
-    onChange();
+    if (!res.ok || !res.data) {
+      setMessage(`Error: ${res.error || "Discord mirror failed"}`);
+      return;
+    }
+    setMessage("Mirrored to Discord.");
+    if (announcement && res.data.discordSentAt) {
+      onChange({ ...announcement, discordSentAt: res.data.discordSentAt });
+    }
   }
 
   const statusBadge = announcement
@@ -1133,15 +1290,22 @@ function ClassroomSection({
         <p className="text-[11px] text-gray-500 leading-snug">
           Classroom only accepts plain text — formatting uses Unicode (𝐛𝐨𝐥𝐝, 𝑖𝑡𝑎𝑙𝑖𝑐, U̲n̲d̲e̲r̲l̲i̲n̲e̲, • bullets) so it survives the API.
         </p>
-        <Field label={locked ? "Sent at" : "Schedule for (only used when scheduling)"}>
-          <input
-            type="datetime-local"
-            disabled={locked}
-            value={scheduledFor}
-            onChange={(e) => setScheduledFor(e.target.value)}
-            className="input disabled:opacity-60"
-          />
-        </Field>
+        {locked ? (
+          announcement?.sentAt && (
+            <p className="text-xs text-gray-500">
+              Sent {fmtDate(announcement.sentAt)} · {fmtTime(announcement.sentAt)}
+            </p>
+          )
+        ) : (
+          <Field label="Schedule for (only used when scheduling)">
+            <input
+              type="datetime-local"
+              value={scheduledFor}
+              onChange={(e) => setScheduledFor(e.target.value)}
+              className="input"
+            />
+          </Field>
+        )}
         {message && (
           <p className={`text-xs ${message.startsWith("Error") ? "text-red-600" : "text-green-600"}`}>
             {message}

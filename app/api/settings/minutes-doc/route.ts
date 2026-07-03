@@ -1,14 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getSession } from "@/lib/session";
+import { requireSecgen } from "@/lib/auth";
 import { getMinutesDocSettings, setMinutesDocSettings } from "@/lib/settings";
-
-async function requireSecgen() {
-  const session = await getSession();
-  if (!session.isSecgen) {
-    return NextResponse.json({ error: "Sec-Gen access required" }, { status: 403 });
-  }
-  return null;
-}
 
 export async function GET() {
   const denied = await requireSecgen();

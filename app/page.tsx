@@ -7,14 +7,14 @@ export const dynamic = "force-dynamic";
 export default async function DashboardPage() {
   const now = new Date();
 
-  const [nextMeeting, openTasks, overdueTasks, upcoming, recentDone] =
+  const [nextMeeting, openTasks, overdueTasks, upcoming, recentDone, overdueList] =
     await Promise.all([
       prisma.meeting.findFirst({
         where: { date: { gte: now }, archivedAt: null },
         orderBy: { date: "asc" },
         include: {
           topicGuide: { select: { id: true } },
-          announcement: true,
+          announcement: { select: { id: true, status: true } },
           _count: { select: { tasks: true } },
         },
       }),
@@ -26,7 +26,7 @@ export default async function DashboardPage() {
         take: 5,
         include: {
           topicGuide: { select: { id: true } },
-          announcement: true,
+          announcement: { select: { id: true, status: true } },
           _count: { select: { tasks: true } },
         },
       }),
@@ -34,6 +34,15 @@ export default async function DashboardPage() {
         where: { completed: true, completedAt: { not: null } },
         orderBy: { completedAt: "desc" },
         take: 6,
+        include: {
+          executive: { select: { name: true } },
+          meeting: { select: { id: true, title: true } },
+        },
+      }),
+      prisma.task.findMany({
+        where: { completed: false, dueDate: { lt: now } },
+        orderBy: { dueDate: "asc" },
+        take: 5,
         include: {
           executive: { select: { name: true } },
           meeting: { select: { id: true, title: true } },
@@ -131,7 +140,42 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      {/* Needs attention */}
+      {/* Overdue tasks that need chasing */}
+      {overdueList.length > 0 && (
+        <div className="bg-white rounded-xl border border-red-200 shadow-sm p-5 mt-6">
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-gray-900">Needs attention</h2>
+            <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+              {overdueTasks} overdue
+            </span>
+          </div>
+          <ul className="divide-y divide-gray-100">
+            {overdueList.map((t) => (
+              <li key={t.id}>
+                <Link
+                  href={`/meetings/${t.meeting.id}`}
+                  className="flex items-center gap-3 py-2 hover:bg-gray-50 -mx-2 px-2 rounded"
+                >
+                  <span className="w-2 h-2 rounded-full bg-red-500 shrink-0" />
+                  <span className="flex-1 text-sm text-gray-800 truncate">
+                    {t.description}
+                  </span>
+                  <span className="text-xs text-gray-500 shrink-0">
+                    {t.executive.name}
+                  </span>
+                  {t.dueDate && (
+                    <span className="text-xs text-red-600 font-medium shrink-0">
+                      due {fmtDateCompact(t.dueDate)}
+                    </span>
+                  )}
+                </Link>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {/* Upcoming meetings */}
       <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5 mt-6">
         <div className="flex items-center justify-between mb-3">
           <h2 className="font-semibold text-gray-900">Upcoming meetings</h2>

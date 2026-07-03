@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireLogin } from "@/lib/auth";
 import { syncMinutesDoc } from "@/lib/minutes-sync";
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const denied = await requireLogin();
+  if (denied) return denied;
   const id = params.id;
   const data = await request.json();
 
@@ -48,6 +51,8 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const denied = await requireLogin();
+  if (denied) return denied;
   const id = params.id;
   await prisma.meeting.delete({ where: { id } });
   return NextResponse.json({ ok: true });

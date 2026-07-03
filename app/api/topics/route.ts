@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireLogin } from "@/lib/auth";
 import { TOPIC_CATEGORIES, TOPIC_DIFFICULTIES } from "@/lib/topic-seeds";
 
 const STATUSES = ["idea", "shortlisted", "used", "archived"] as const;
@@ -18,6 +19,8 @@ function normalizeCategory(c: unknown): string {
 }
 
 export async function GET() {
+  const denied = await requireLogin();
+  if (denied) return denied;
   const topics = await prisma.topic.findMany({
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
   });
@@ -25,6 +28,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const denied = await requireLogin();
+  if (denied) return denied;
   const data = await request.json();
   const title = typeof data.title === "string" ? data.title.trim() : "";
   if (!title) {

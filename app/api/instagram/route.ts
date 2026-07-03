@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireLogin } from "@/lib/auth";
 import { storage, ID, BUCKETS } from "@/lib/appwrite";
 import { InputFile } from "node-appwrite/file";
 
@@ -17,6 +18,8 @@ const publicFields = {
 } as const;
 
 export async function GET() {
+  const denied = await requireLogin();
+  if (denied) return denied;
   const posts = await prisma.instagramPost.findMany({
     orderBy: [{ status: "asc" }, { createdAt: "desc" }],
     select: publicFields,
@@ -25,6 +28,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const denied = await requireLogin();
+  if (denied) return denied;
   const formData = await request.formData();
   const idRaw = formData.get("id") as string | null;
   const caption = formData.get("caption") as string;
@@ -102,6 +107,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const denied = await requireLogin();
+  if (denied) return denied;
   const { id } = await request.json();
   // Best-effort: remove the bucket file too. The DB delete is the source of
   // truth; a lingering bucket file is harmless if cleanup fails.

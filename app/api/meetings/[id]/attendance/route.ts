@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireLogin } from "@/lib/auth";
 import { syncMinutesDoc } from "@/lib/minutes-sync";
 
 // POST /api/meetings/[id]/attendance — set an executive's present/absent state.
@@ -7,6 +8,8 @@ export async function POST(
   request: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const denied = await requireLogin();
+  if (denied) return denied;
   const meetingId = params.id;
   if (!meetingId) {
     return NextResponse.json({ error: "Bad meeting id" }, { status: 400 });

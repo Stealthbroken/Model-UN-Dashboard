@@ -427,6 +427,10 @@ async function expandIncludes(
   const rels = RELATIONS[modelKey] || {};
   const ids = rows.map((r) => r.id as string);
 
+  // Each relation writes to a distinct key on each row, so all expansions can
+  // hit Appwrite concurrently — round trips are the dominant cost here.
+  const jobs: Promise<void>[] = [];
+
   for (const [name, spec] of Object.entries(include)) {
     if (name === "_count") continue;
     const rel = rels[name];
@@ -436,68 +440,77 @@ async function expandIncludes(
     const subSpec = (spec === true ? {} : spec) as { where?: Where; orderBy?: OrderInput; include?: IncludeSpec; select?: Record<string, true> };
 
     if (rel.kind === "hasMany" || rel.kind === "hasOne") {
-      const queries = [Query.equal(rel.field, ids as never)];
-      if (subSpec.where) queries.push(...buildWhere(childMeta, subSpec.where).queries);
-      if (subSpec.orderBy) queries.push(...buildOrder(subSpec.orderBy));
-      const children = await listAll(childMeta.collection, queries);
+      jobs.push((async () => {
+        const queries = [Query.equal(rel.field, ids as never)];
+        if (subSpec.where) queries.push(...buildWhere(childMeta, subSpec.where).queries);
+        if (subSpec.orderBy) queries.push(...buildOrder(subSpec.orderBy));
+        const children = await listAll(childMeta.collection, queries);
 
-      const byParent = new Map<string, Array<Record<string, unknown>>>();
-      for (const c of children) {
-        const pid = c[rel.field] as string;
-        const mapped = mapDoc<Record<string, unknown>>(childMeta, c)!;
-        if (!byParent.has(pid)) byParent.set(pid, []);
-        byParent.get(pid)!.push(mapped);
-      }
-
-      if (subSpec.include) {
-        for (const list of Array.from(byParent.values())) {
-          await expandIncludes(rel.targetMeta, list, subSpec.include);
+        const byParent = new Map<string, Array<Record<string, unknown>>>();
+        for (const c of children) {
+          const pid = c[rel.field] as string;
+          const mapped = mapDoc<Record<string, unknown>>(childMeta, c)!;
+          if (!byParent.has(pid)) byParent.set(pid, []);
+          byParent.get(pid)!.push(mapped);
         }
-      }
 
-      for (const row of rows) {
-        const list = byParent.get(row.id as string) ?? [];
-        const projected = subSpec.select ? list.map((c) => applySelect(c, subSpec.select)) : list;
-        if (rel.kind === "hasOne") row[name] = projected[0] ?? null;
-        else                       row[name] = projected;
-      }
+        if (subSpec.include) {
+          await Promise.all(
+            Array.from(byParent.values()).map((list) =>
+              expandIncludes(rel.targetMeta, list, subSpec.include),
+            ),
+          );
+        }
+
+        for (const row of rows) {
+          const list = byParent.get(row.id as string) ?? [];
+          const projected = subSpec.select ? list.map((c) => applySelect(c, subSpec.select)) : list;
+          if (rel.kind === "hasOne") row[name] = projected[0] ?? null;
+          else                       row[name] = projected;
+        }
+      })());
     } else {
-      const parentIds = Array.from(new Set(rows.map((r) => r[rel.field] as string).filter(Boolean)));
-      if (parentIds.length === 0) {
-        for (const row of rows) row[name] = null;
-        continue;
-      }
-      const parents = await listAll(childMeta.collection, [Query.equal("$id", parentIds as never)]);
-      const byId = new Map<string, Record<string, unknown>>();
-      for (const p of parents) byId.set(p.$id, mapDoc<Record<string, unknown>>(childMeta, p)!);
-      if (subSpec.include) await expandIncludes(rel.targetMeta, Array.from(byId.values()), subSpec.include);
-      for (const row of rows) {
-        const parent = byId.get(row[rel.field] as string);
-        row[name] = parent ? (subSpec.select ? applySelect(parent, subSpec.select) : parent) : null;
-      }
+      jobs.push((async () => {
+        const parentIds = Array.from(new Set(rows.map((r) => r[rel.field] as string).filter(Boolean)));
+        if (parentIds.length === 0) {
+          for (const row of rows) row[name] = null;
+          return;
+        }
+        const parents = await listAll(childMeta.collection, [Query.equal("$id", parentIds as never)]);
+        const byId = new Map<string, Record<string, unknown>>();
+        for (const p of parents) byId.set(p.$id, mapDoc<Record<string, unknown>>(childMeta, p)!);
+        if (subSpec.include) await expandIncludes(rel.targetMeta, Array.from(byId.values()), subSpec.include);
+        for (const row of rows) {
+          const parent = byId.get(row[rel.field] as string);
+          row[name] = parent ? (subSpec.select ? applySelect(parent, subSpec.select) : parent) : null;
+        }
+      })());
     }
   }
 
   if (include._count?.select) {
     const sel = include._count.select;
     for (const row of rows) row._count = {} as Record<string, number>;
-    if (sel.tasks) {
-      const counts = await Promise.all(
-        ids.map((id) => databases.listDocuments(DB_ID, COLLECTIONS.task, [
-          Query.equal("meetingId", id), Query.limit(1),
-        ]).then((r) => r.total)),
-      );
-      rows.forEach((r, i) => { (r._count as Record<string, number>).tasks = counts[i]; });
-    }
-    if (sel.attendance) {
-      const counts = await Promise.all(
-        ids.map((id) => databases.listDocuments(DB_ID, COLLECTIONS.meetingAttendance, [
-          Query.equal("meetingId", id), Query.limit(1),
-        ]).then((r) => r.total)),
-      );
-      rows.forEach((r, i) => { (r._count as Record<string, number>).attendance = counts[i]; });
+    const countDefs: Array<{ key: string; collection: string }> = [];
+    if (sel.tasks) countDefs.push({ key: "tasks", collection: COLLECTIONS.task });
+    if (sel.attendance) countDefs.push({ key: "attendance", collection: COLLECTIONS.meetingAttendance });
+    for (const def of countDefs) {
+      jobs.push((async () => {
+        // One batched query for every parent id instead of one query per row.
+        const children = await listAll(def.collection, [Query.equal("meetingId", ids as never)]);
+        const counts = new Map<string, number>();
+        for (const c of children) {
+          const pid = c.meetingId as string;
+          counts.set(pid, (counts.get(pid) ?? 0) + 1);
+        }
+        for (const row of rows) {
+          (row._count as Record<string, number>)[def.key] = counts.get(row.id as string) ?? 0;
+        }
+      })());
     }
   }
+
+  await Promise.all(jobs);
 }
 
 // ─── Compound unique key unwrap ────────────────────────────────────────────

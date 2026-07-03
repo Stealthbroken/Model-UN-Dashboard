@@ -18,13 +18,19 @@ export default async function ExecutivesPage() {
     return <SecgenLock configured={secgenConfigured} />;
   }
 
-  const [execs, settings, discordWebhookUrl] = await Promise.all([
+  const [execsRaw, settings, discordWebhookUrl] = await Promise.all([
     prisma.executive.findMany({
       orderBy: [{ active: "desc" }, { sortOrder: "asc" }, { name: "asc" }],
     }),
     getMinutesDocSettings(),
     getDiscordWebhookUrl(),
   ]);
+
+  // Expose only whether a PIN is set — never send the hash to the client.
+  const execs = execsRaw.map((e) => {
+    const { pinHash, ...rest } = e as typeof e & { pinHash?: string | null };
+    return { ...rest, hasPin: !!pinHash };
+  });
 
   return (
     <div>

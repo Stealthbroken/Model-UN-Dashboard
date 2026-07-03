@@ -10,6 +10,7 @@ interface Executive {
   email: string | null;
   active: boolean;
   sortOrder: number;
+  hasPin?: boolean;
 }
 
 export function ExecutivesManager({ initial }: { initial: Executive[] }) {
@@ -55,6 +56,16 @@ export function ExecutivesManager({ initial }: { initial: Executive[] }) {
     await fetch(`/api/executives/${id}`, { method: "DELETE" });
     setExecs((cur) => cur.filter((e) => e.id !== id));
     router.refresh();
+  }
+
+  async function resetPin(id: string) {
+    if (!confirm("Clear this person's My Tasks PIN? They can set a new one next time they open My Tasks.")) return;
+    setExecs((cur) => cur.map((e) => (e.id === id ? { ...e, hasPin: false } : e)));
+    await fetch(`/api/executives/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ resetPin: true }),
+    });
   }
 
   const activeExecs = execs.filter((e) => e.active);
@@ -103,6 +114,7 @@ export function ExecutivesManager({ initial }: { initial: Executive[] }) {
         execs={activeExecs}
         onUpdate={update}
         onRemove={remove}
+        onResetPin={resetPin}
       />
 
       {inactiveExecs.length > 0 && (
@@ -111,6 +123,7 @@ export function ExecutivesManager({ initial }: { initial: Executive[] }) {
           execs={inactiveExecs}
           onUpdate={update}
           onRemove={remove}
+          onResetPin={resetPin}
         />
       )}
     </div>
@@ -122,11 +135,13 @@ function ExecList({
   execs,
   onUpdate,
   onRemove,
+  onResetPin,
 }: {
   title: string;
   execs: Executive[];
   onUpdate: (id: string, patch: Partial<Executive>) => void;
   onRemove: (id: string) => void;
+  onResetPin: (id: string) => void;
 }) {
   return (
     <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
@@ -138,7 +153,7 @@ function ExecList({
       ) : (
         <ul className="divide-y divide-gray-100">
           {execs.map((e) => (
-            <ExecRow key={e.id} exec={e} onUpdate={onUpdate} onRemove={onRemove} />
+            <ExecRow key={e.id} exec={e} onUpdate={onUpdate} onRemove={onRemove} onResetPin={onResetPin} />
           ))}
         </ul>
       )}
@@ -150,10 +165,12 @@ function ExecRow({
   exec,
   onUpdate,
   onRemove,
+  onResetPin,
 }: {
   exec: Executive;
   onUpdate: (id: string, patch: Partial<Executive>) => void;
   onRemove: (id: string) => void;
+  onResetPin: (id: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
@@ -203,11 +220,27 @@ function ExecRow({
   return (
     <li className="py-3 flex items-center gap-3">
       <div className="flex-1 min-w-0">
-        <p className="font-medium text-gray-900 truncate">{exec.name}</p>
+        <p className="font-medium text-gray-900 truncate">
+          {exec.name}
+          {exec.hasPin && (
+            <span className="ml-1.5 text-xs text-gray-400" title="Has a My Tasks PIN set">
+              🔒
+            </span>
+          )}
+        </p>
         <p className="text-xs text-gray-500 truncate">
           {[exec.role, exec.email].filter(Boolean).join(" · ") || "—"}
         </p>
       </div>
+      {exec.hasPin && (
+        <button
+          onClick={() => onResetPin(exec.id)}
+          className="text-xs text-gray-500 hover:underline"
+          title="Clear their My Tasks PIN if they're locked out"
+        >
+          Reset PIN
+        </button>
+      )}
       <button
         onClick={() => onUpdate(exec.id, { active: !exec.active })}
         className="text-xs text-gray-500 hover:underline"

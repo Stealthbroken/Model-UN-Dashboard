@@ -16,6 +16,20 @@ Open http://localhost:3000 and log in with the password set in `.env.local`.
 
 To put the app online for free, see **[DEPLOY.md](DEPLOY.md)**.
 
+> **Upgrading an existing install?** Re-run `npm run appwrite:setup` after pulling
+> — it's idempotent and adds the new `pinHash` field used by My Tasks profiles.
+
+### My Tasks profiles
+
+Everyone shares the one team password to get in. On the **My Tasks** page each
+person picks who they are once; the choice is remembered in their session (so
+the list auto-loads on future visits) and can be changed with **Switch**.
+
+Optionally, anyone can set a **4–8 digit PIN** on their profile so nobody else
+can select their name and check off their tasks. PINs are stored hashed
+(bcrypt). If someone forgets theirs, a Sec-Gen admin can clear it with
+**Reset PIN** in the Sec-Gen Panel.
+
 ---
 
 ## Environment Variables
@@ -37,6 +51,8 @@ Copy `.env.example` to `.env.local` and fill in:
 | `CLASSROOM_COURSE_ID` | For Classroom | The Google Classroom course ID |
 | `INSTAGRAM_ACCESS_TOKEN` | For auto-post | Meta Graph API long-lived token |
 | `INSTAGRAM_USER_ID` | For auto-post | Your Instagram Business account user ID |
+| `CRON_SECRET` | Optional | If set, the cron endpoints require this value in an `x-cron-secret` header (sent automatically by `server.js`) |
+| `CALENDAR_FEED_TOKEN` | Optional | Enables subscribing to the meeting calendar from Google/Apple Calendar: `https://<host>/api/calendar/ics?token=<value>` |
 
 ---
 

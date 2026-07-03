@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { fmtTime } from "@/lib/format";
+import { MeetingsTabs } from "@/components/MeetingsTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -61,6 +62,7 @@ export default async function CalendarPage({
 
   return (
     <div>
+      <MeetingsTabs />
       <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Calendar</h1>
@@ -90,6 +92,13 @@ export default async function CalendarPage({
           >
             Today
           </Link>
+          <a
+            href="/api/calendar/ics"
+            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+            title="Download an .ics file — or subscribe in Google Calendar with /api/calendar/ics?token=… (see README)"
+          >
+            📆 iCal
+          </a>
         </div>
       </div>
 

@@ -238,6 +238,9 @@ async function setupCollections() {
   await bool ("executives", "active",    false, true);
   await int  ("executives", "sortOrder", false, 0);
   await dt   ("executives", "createdAt", true);
+  // Optional bcrypt PIN so a person's "My Tasks" profile can't be picked
+  // (and their tasks checked off) by someone else. Empty = no PIN.
+  await str  ("executives", "pinHash",   200);
 
   // MeetingAttendance ─────────────────────────────────────
   await step("collection meeting_attendances", () =>

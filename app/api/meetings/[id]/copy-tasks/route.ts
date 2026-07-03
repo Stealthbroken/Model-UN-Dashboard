@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, type Task } from "@/lib/db";
+import { requireLogin } from "@/lib/auth";
 import { syncMinutesDoc } from "@/lib/minutes-sync";
 
 export async function POST(
   _request: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const denied = await requireLogin();
+  if (denied) return denied;
   const id = params.id;
   if (!id) return NextResponse.json({ error: "Bad id" }, { status: 400 });
 
@@ -52,10 +55,11 @@ export async function POST(
     lastOrders.set(t.executiveId, Math.max(lastOrders.get(t.executiveId) ?? -1, t.sortOrder));
   }
 
-  for (const t of toCreate) {
+  // Sort orders are assigned synchronously, so the creates can run in parallel.
+  const creates = toCreate.map((t) => {
     const order = (lastOrders.get(t.executiveId) ?? -1) + 1;
     lastOrders.set(t.executiveId, order);
-    await prisma.task.create({
+    return prisma.task.create({
       data: {
         meetingId: id,
         executiveId: t.executiveId,
@@ -65,7 +69,8 @@ export async function POST(
         sortOrder: order,
       },
     });
-  }
+  });
+  await Promise.all(creates);
 
   void syncMinutesDoc(id);
   return NextResponse.json({ copied: toCreate.length });

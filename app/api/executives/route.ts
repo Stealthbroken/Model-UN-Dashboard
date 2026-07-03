@@ -1,22 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/session";
-
-async function requireSecgen() {
-  const session = await getSession();
-  if (!session.isSecgen) {
-    return NextResponse.json({ error: "Sec-Gen access required" }, { status: 403 });
-  }
-  return null;
-}
+import { requireLogin, requireSecgen } from "@/lib/auth";
 
 export async function GET() {
-  // GET stays open so the meeting page can show exec names + assign tasks.
-  // Mutations below all require sec-gen.
+  // Any signed-in user can read the roster (the meeting page shows exec
+  // names + assigns tasks). Mutations below all require sec-gen.
+  const denied = await requireLogin();
+  if (denied) return denied;
   const execs = await prisma.executive.findMany({
     orderBy: [{ active: "desc" }, { sortOrder: "asc" }, { name: "asc" }],
   });
-  return NextResponse.json(execs);
+  // Never leak the PIN hash to the client — expose a boolean instead.
+  const safe = execs.map((e) => {
+    const { pinHash, ...rest } = e as typeof e & { pinHash?: string | null };
+    return { ...rest, hasPin: !!pinHash };
+  });
+  return NextResponse.json(safe);
 }
 
 export async function POST(request: NextRequest) {

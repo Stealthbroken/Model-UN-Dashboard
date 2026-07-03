@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireLogin } from "@/lib/auth";
 import { createMinutesDoc } from "@/lib/appscript";
 import { getMinutesDocSettings } from "@/lib/settings";
 import { buildMinutesPayload } from "@/lib/minutes-sync";
@@ -8,6 +9,8 @@ export async function POST(
   _request: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const denied = await requireLogin();
+  if (denied) return denied;
   const id = params.id;
   if (!id) return NextResponse.json({ error: "Bad id" }, { status: 400 });
 

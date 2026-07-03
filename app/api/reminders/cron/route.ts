@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireCronSecret } from "@/lib/auth";
 import { sendReminderEmail } from "@/lib/appscript";
 import { fmtDateLong, fmtTime } from "@/lib/format";
 
@@ -12,7 +13,9 @@ import { fmtDateLong, fmtTime } from "@/lib/format";
  *
  * Idempotent: each meeting gets one reminder via reminderSentAt.
  */
-export async function POST() {
+export async function POST(request: Request) {
+  const denied = requireCronSecret(request);
+  if (denied) return denied;
   const now = new Date();
   const eighteenHoursOut = new Date(now.getTime() + 18 * 60 * 60 * 1000);
 
