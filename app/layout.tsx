@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import "./globals.css";
 import { Sidebar } from "@/components/Sidebar";
+import { CommandPalette } from "@/components/CommandPalette";
 
 export const metadata: Metadata = {
   title: "MUN Dashboard",
@@ -26,8 +27,10 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-gray-50 min-h-screen">
         <div className="flex min-h-screen">
           <Sidebar />
-          <main className="flex-1 p-8">{children}</main>
+          {/* pt-20 clears the fixed mobile top bar; lg reverts to the desktop gutter */}
+          <main className="flex-1 min-w-0 p-4 pt-20 lg:p-8">{children}</main>
         </div>
+        <CommandPalette />
       </body>
     </html>
   );

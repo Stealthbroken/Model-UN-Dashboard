@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireLogin } from "@/lib/auth";
 import { TOPIC_CATEGORIES, TOPIC_DIFFICULTIES } from "@/lib/topic-seeds";
 
 const STATUSES = ["idea", "shortlisted", "used", "archived"] as const;
@@ -8,6 +9,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const denied = await requireLogin();
+  if (denied) return denied;
   const id = params.id;
   if (!id) return NextResponse.json({ error: "Bad id" }, { status: 400 });
 
@@ -43,6 +46,8 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const denied = await requireLogin();
+  if (denied) return denied;
   const id = params.id;
   if (!id) return NextResponse.json({ error: "Bad id" }, { status: 400 });
   await prisma.topic.delete({ where: { id } });

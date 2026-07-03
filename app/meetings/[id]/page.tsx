@@ -1,4 +1,4 @@
-import { prisma, type Task } from "@/lib/db";
+import { prisma } from "@/lib/db";
 import { notFound } from "next/navigation";
 import { MeetingDetail } from "@/components/MeetingDetail";
 
@@ -8,32 +8,34 @@ export default async function MeetingPage({ params }: { params: { id: string } }
   const id = params.id;
   if (!id) notFound();
 
-  const meeting = await prisma.meeting.findUnique({
-    where: { id },
-    include: {
-      // Exclude the PDF blob — it's served separately via its API route.
-      topicGuide: { select: { id: true, filename: true, path: true } },
-      announcement: true,
-      tasks: { orderBy: { sortOrder: "asc" } },
-      attendance: true,
-    },
-  });
+  const [meeting, executives] = await Promise.all([
+    prisma.meeting.findUnique({
+      where: { id },
+      include: {
+        // Exclude the PDF blob — it's served separately via its API route.
+        topicGuide: { select: { id: true, filename: true, path: true } },
+        announcement: true,
+        tasks: { orderBy: { sortOrder: "asc" } },
+        attendance: true,
+      },
+    }),
+    prisma.executive.findMany({
+      where: { active: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    }),
+  ]);
 
   if (!meeting) notFound();
-
-  const executives = await prisma.executive.findMany({
-    where: { active: true },
-    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-  });
 
   const previousMeeting = await prisma.meeting.findFirst({
     where: { date: { lt: meeting.date } },
     orderBy: { date: "desc" },
-    include: { tasks: true },
   });
 
   const previousUnfinishedCount = previousMeeting
-    ? (previousMeeting.tasks as Task[]).filter((t) => !t.completed).length
+    ? await prisma.task.count({
+        where: { meetingId: previousMeeting.id, completed: false },
+      })
     : 0;
 
   return (

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireLogin } from "@/lib/auth";
 import { createMinutesDoc } from "@/lib/appscript";
 import { getMinutesDocSettings } from "@/lib/settings";
 import { buildMinutesPayload } from "@/lib/minutes-sync";
@@ -39,6 +40,8 @@ async function tryCreateMinutesDoc(meetingId: string): Promise<void> {
 }
 
 export async function GET() {
+  const denied = await requireLogin();
+  if (denied) return denied;
   const meetings = await prisma.meeting.findMany({
     orderBy: { date: "asc" },
   });
@@ -53,6 +56,8 @@ export async function GET() {
  * Both return the created meetings as an array.
  */
 export async function POST(request: NextRequest) {
+  const denied = await requireLogin();
+  if (denied) return denied;
   const data = await request.json();
 
   if (data.mode === "recurring") {
@@ -170,6 +175,8 @@ async function createRecurring(data: {
 }
 
 export async function DELETE(request: NextRequest) {
+  const denied = await requireLogin();
+  if (denied) return denied;
   const { id } = await request.json();
   await prisma.meeting.delete({ where: { id } });
   return NextResponse.json({ ok: true });

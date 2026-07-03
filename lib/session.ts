@@ -3,6 +3,9 @@ import { SessionOptions } from "iron-session";
 export interface SessionData {
   isLoggedIn: boolean;
   isSecgen?: boolean;
+  // Lightweight profile: which executive this browser is acting as. Drives
+  // "My Tasks" and is optionally protected by a per-exec PIN.
+  executiveId?: string | null;
 }
 
 // iron-session requires a 32+ char secret. We pad shorter passwords by repeating
@@ -44,5 +47,6 @@ export async function getSession(): Promise<SessionData> {
   return {
     isLoggedIn: !!session.isLoggedIn,
     isSecgen: !!session.isSecgen,
+    executiveId: session.executiveId ?? null,
   };
 }

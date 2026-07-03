@@ -19,7 +19,12 @@ app.prepare().then(() => {
 
   async function runCron(path, label) {
     try {
-      const res = await fetch(`http://localhost:${port}${path}`, { method: "POST" });
+      const res = await fetch(`http://localhost:${port}${path}`, {
+        method: "POST",
+        headers: process.env.CRON_SECRET
+          ? { "x-cron-secret": process.env.CRON_SECRET }
+          : {},
+      });
       if (!res.ok) console.error(`Cron: ${label} failed`, res.status);
     } catch {
       // Server may not be ready yet

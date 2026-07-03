@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma, type Topic } from "@/lib/db";
+import { requireLogin } from "@/lib/auth";
 import { TOPIC_SEEDS, TOPIC_CATEGORIES, type SeedTopic } from "@/lib/topic-seeds";
 import { openAiChat, openAiConfigured } from "@/lib/openai";
 
@@ -27,6 +28,8 @@ interface Suggestion {
  *     curated list so the UI never sees an empty response.
  */
 export async function POST() {
+  const denied = await requireLogin();
+  if (denied) return denied;
   const existing = await prisma.topic.findMany();
   const existingNorm = new Set(
     (existing as Topic[]).map((t) => t.title.toLowerCase().trim()),

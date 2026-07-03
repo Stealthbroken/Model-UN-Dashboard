@@ -24,7 +24,12 @@ export default function LoginPage() {
       router.push("/");
       router.refresh();
     } else {
-      setError("Incorrect password");
+      const data = await res.json().catch(() => null);
+      setError(
+        res.status === 429
+          ? data?.error || "Too many attempts — try again in a minute."
+          : "Incorrect password",
+      );
       setLoading(false);
     }
   }
