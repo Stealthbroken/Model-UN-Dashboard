@@ -160,7 +160,7 @@ export interface TopicGuideDocData {
  */
 export async function createTopicGuideDoc(
   data: TopicGuideDocData,
-): Promise<{ ok: boolean; error?: string; docId?: string; docUrl?: string }> {
+): Promise<{ ok: boolean; error?: string; docId?: string; docUrl?: string; note?: string }> {
   const url = process.env.APPS_SCRIPT_URL;
   if (!url) return { ok: false, error: "Apps Script URL not configured" };
 
@@ -190,6 +190,8 @@ export async function createTopicGuideDoc(
       error: explainScriptError(json.error),
       docId: json.docId,
       docUrl: json.docUrl,
+      // Set when the configured folder was unusable and Drive fell back to My Drive.
+      note: json.note || undefined,
     };
   } catch (err: unknown) {
     return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };

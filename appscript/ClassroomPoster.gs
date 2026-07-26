@@ -421,9 +421,17 @@ function styleTable(table) {
 /* ═════════════════ Topic Guide Doc ═════════════════ */
 
 /**
- * Builds a research-ready topic guide skeleton for a Topic Bank entry. Every
- * section is a prompt for the delegate writing it — the dashboard never
- * re-syncs this Doc, so the whole thing belongs to whoever edits it.
+ * Creates a research-ready topic guide Doc for a Topic Bank entry.
+ *
+ * Deliberately avoids DocumentApp. Drive converts an uploaded HTML file into a
+ * native Google Doc, so this needs only the Drive scope — the same one the
+ * Classroom attachment path already uses. The earlier DocumentApp version
+ * required https://www.googleapis.com/auth/documents on top of that, and when
+ * that scope isn't granted it fails *after* the empty file exists, leaving an
+ * orphan behind. One Drive call either fully succeeds or creates nothing.
+ *
+ * The dashboard never re-syncs this Doc, so a create-only path loses nothing:
+ * once it exists it belongs to whoever is researching the topic.
  *
  * Expects: { title, description, category, difficulty, notes, folderId }
  */
@@ -440,58 +448,74 @@ function handleCreateTopicGuideDoc(data) {
   }
 
   var docName = "Topic Guide — " + data.title;
+  var blob = Utilities.newBlob(buildTopicGuideHtml(data), "text/html", docName + ".html");
+  var note = "";
 
-  var doc;
-  if (folderId) {
-    try {
-      var driveFile = Drive.Files.create(
-        { name: docName, mimeType: "application/vnd.google-apps.document", parents: [folderId] },
-        null,
-        { supportsAllDrives: true }
-      );
-      doc = DocumentApp.openById(driveFile.id);
-    } catch (driveErr) {
-      doc = DocumentApp.create(docName);
+  var file;
+  try {
+    file = createConvertedDoc(docName, blob, folderId);
+  } catch (err) {
+    // A bad/inaccessible folder id shouldn't cost the whole guide — retry in
+    // the script owner's My Drive and tell the dashboard where it landed.
+    if (folderId) {
+      try {
+        file = createConvertedDoc(docName, blob, "");
+        note = "Couldn't write to the configured folder, so the guide was created in My Drive instead.";
+      } catch (fallbackErr) {
+        return jsonResponse({ ok: false, error: String(fallbackErr) });
+      }
+    } else {
+      return jsonResponse({ ok: false, error: String(err) });
     }
-  } else {
-    doc = DocumentApp.create(docName);
   }
 
-  var body = doc.getBody();
-  body.clear();
-  applyMinutesTheme(body);   // same navy/gray palette as the minutes Docs
+  return jsonResponse({
+    ok: true,
+    docId: file.id,
+    docUrl: file.webViewLink || "https://docs.google.com/document/d/" + file.id + "/edit",
+    note: note
+  });
+}
 
-  var idx = 0;
+/* Uploads an HTML blob and asks Drive to store it as a native Google Doc. */
+function createConvertedDoc(docName, blob, folderId) {
+  var resource = { name: docName, mimeType: "application/vnd.google-apps.document" };
+  if (folderId) resource.parents = [folderId];
+  return Drive.Files.create(resource, blob, {
+    supportsAllDrives: true,
+    fields: "id,webViewLink"
+  });
+}
+
+/**
+ * The guide skeleton as HTML. Drive's converter honours headings, lists, bold,
+ * italics and inline colours, which covers everything the DocumentApp version
+ * styled by hand. Prompts are grey italics so typed-over text reads normally.
+ */
+function buildTopicGuideHtml(data) {
   var tz = Session.getScriptTimeZone();
+  var h = [];
 
-  // ── Header ──
-  body.insertParagraph(idx++, "Topic Guide")
-    .setHeading(DocumentApp.ParagraphHeading.TITLE);
-  body.insertParagraph(idx++, data.title)
-    .setHeading(DocumentApp.ParagraphHeading.SUBTITLE);
+  h.push('<meta charset="utf-8">');
+  h.push('<h1 style="color:' + MIN_ACCENT + '">Topic Guide</h1>');
+  h.push('<h2 style="color:' + MIN_MUTED + ';font-weight:normal">' + esc(data.title) + '</h2>');
 
   var meta = [];
-  if (data.category) meta.push(data.category);
-  if (data.difficulty) meta.push(titleCase(data.difficulty) + " level");
+  if (data.category) meta.push(esc(data.category));
+  if (data.difficulty) meta.push(esc(titleCase(data.difficulty)) + " level");
   meta.push("Created " + Utilities.formatDate(new Date(), tz, "dd/MM/yyyy"));
-  mutedLine(body, idx++, meta.join("      "), 10, false);
+  h.push('<p style="color:' + MIN_MUTED + ';font-size:10pt">' + meta.join(" &nbsp;·&nbsp; ") + "</p>");
+  h.push("<hr>");
 
-  body.insertHorizontalRule(idx++);
-
-  // ── Framing carried over from the Topic Bank ──
   if (data.description && String(data.description).trim()) {
-    body.insertParagraph(idx++, "The Question")
-      .setHeading(DocumentApp.ParagraphHeading.HEADING1);
-    body.insertParagraph(idx++, String(data.description).trim());
+    h.push('<h2 style="color:' + MIN_ACCENT + '">The Question</h2>');
+    h.push("<p>" + esc(String(data.description).trim()) + "</p>");
   }
-
   if (data.notes && String(data.notes).trim()) {
-    body.insertParagraph(idx++, "Chair Notes")
-      .setHeading(DocumentApp.ParagraphHeading.HEADING1);
-    mutedLine(body, idx++, String(data.notes).trim(), 10, true);
+    h.push('<h2 style="color:' + MIN_ACCENT + '">Chair Notes</h2>');
+    h.push('<p style="color:' + MIN_MUTED + '"><i>' + esc(String(data.notes).trim()) + "</i></p>");
   }
 
-  // ── Sections to fill in ──
   var sections = [
     ["Background", [
       "How did this issue arise? Give delegates the 5-minute version.",
@@ -502,46 +526,41 @@ function handleCreateTopicGuideDoc(data) {
       "What is the state of play right now?",
       "What has been tried, and why hasn't it settled the matter?"
     ]],
-    ["Key Questions for Debate", [
-      "",
-      "",
-      ""
-    ]],
+    ["Key Questions for Debate", ["", "", ""]],
     ["Bloc Positions", [
       "Bloc / country — position, motivation, red lines.",
-      "",
-      ""
+      "", ""
     ]],
     ["Points to Research", [
       "Statistics or precedents worth having on hand.",
       "Likely counter-arguments to prepare for."
     ]],
-    ["Sources", [
-      "Link — one line on why it's useful.",
-      ""
-    ]],
-    ["Glossary", [
-      "Term — plain-English definition."
-    ]]
+    ["Sources", ["Link — one line on why it's useful.", ""]],
+    ["Glossary", ["Term — plain-English definition."]]
   ];
 
-  for (var s = 0; s < sections.length; s++) {
-    body.insertParagraph(idx++, sections[s][0])
-      .setHeading(DocumentApp.ParagraphHeading.HEADING1);
-    var bullets = sections[s][1];
+  for (var i = 0; i < sections.length; i++) {
+    h.push('<h2 style="color:' + MIN_ACCENT + '">' + sections[i][0] + "</h2>");
+    h.push("<ul>");
+    var bullets = sections[i][1];
     for (var b = 0; b < bullets.length; b++) {
-      var li = body.insertListItem(idx++, bullets[b]);
-      li.setGlyphType(DocumentApp.GlyphType.BULLET);
-      // Prompts are gray hints; blank bullets are left as normal body text
-      // so typing over them doesn't inherit the muted styling.
       if (bullets[b]) {
-        li.editAsText().setForegroundColor(MIN_MUTED).setFontSize(10).setItalic(true);
+        h.push('<li style="color:' + MIN_MUTED + '"><i>' + esc(bullets[b]) + "</i></li>");
+      } else {
+        h.push("<li></li>");
       }
     }
+    h.push("</ul>");
   }
 
-  doc.saveAndClose();
-  return jsonResponse({ ok: true, docId: doc.getId(), docUrl: doc.getUrl() });
+  return h.join("\n");
+}
+
+function esc(s) {
+  return String(s == null ? "" : s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 /* ───────── Helpers ───────── */
