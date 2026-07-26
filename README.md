@@ -18,6 +18,13 @@ To put the app online for free, see **[DEPLOY.md](DEPLOY.md)**.
 
 ---
 
+> **Upgrading an existing install?** Re-run `npm run appwrite:setup` after pulling —
+> it's idempotent, and adds the account fields on `executives` plus the topic-guide
+> and voting fields on `topics`. Then re-paste `appscript/ClassroomPoster.gs` into
+> Apps Script and redeploy, for the topic-guide Doc action.
+
+---
+
 ## Environment Variables
 
 Copy `.env.example` to `.env.local` and fill in:
@@ -34,6 +41,8 @@ Copy `.env.example` to `.env.local` and fill in:
 | `NEXT_PUBLIC_BASE_URL` | Yes | Public URL of the app (`http://localhost:3000` locally). Account invite links are built from this, so a wrong value sends people to the wrong host. |
 | `APPS_SCRIPT_URL` | For Classroom, invites, Docs | Your deployed Apps Script web app URL. Also sends account invite emails and generates topic-guide Docs. |
 | `CLASSROOM_COURSE_ID` | For Classroom | The Google Classroom course ID |
+| `CRON_SECRET` | Recommended in production | If set, the cron endpoints require it as `Authorization: Bearer <value>` (sent automatically by `server.js`). If unset, they accept loopback requests only. |
+| `CALENDAR_FEED_TOKEN` | Optional | Enables subscribing to the meeting calendar from Google/Apple Calendar: `https://<host>/api/calendar/ics?token=<value>` |
 | `INSTAGRAM_ACCESS_TOKEN` | For auto-post | Meta Graph API long-lived token |
 | `INSTAGRAM_USER_ID` | For auto-post | Your Instagram Business account user ID |
 
@@ -105,6 +114,15 @@ Generated guides land in the first of these that's set:
 Unlike minutes Docs, topic guides are **never re-synced** — once created the Doc belongs entirely to whoever is researching it. "Unlink" only removes the dashboard's reference; it never deletes the Doc.
 
 If `APPS_SCRIPT_URL` isn't set, the Create button is hidden and you can still paste links by hand.
+
+---
+
+## Calendar subscription & stats export
+
+Two read-only feeds, both requiring a signed-in session:
+
+- **Calendar** — `/api/calendar/ics` serves every non-archived meeting as an iCalendar feed. Calendar apps can't send cookies, so set `CALENDAR_FEED_TOKEN` and subscribe to `https://<host>/api/calendar/ics?token=<value>` from Google or Apple Calendar.
+- **Stats CSV** — `/api/stats/export` returns per-executive task completion and attendance (the same numbers as the Exec Stats page) for sharing with teachers or archiving at year end.
 
 ---
 

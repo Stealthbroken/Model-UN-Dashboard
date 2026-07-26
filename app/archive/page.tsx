@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { fmtDateLong } from "@/lib/format";
+import { MeetingsTabs } from "@/components/MeetingsTabs";
 
 export const dynamic = "force-dynamic";
 
@@ -29,12 +30,13 @@ export default async function ArchivePage({
     include: {
       // Only need existence — never pull the PDF blob into a list view.
       topicGuide: { select: { id: true } },
-      announcement: true,
+      announcement: { select: { id: true } },
     },
   });
 
   return (
     <div>
+      <MeetingsTabs />
       <h1 className="text-2xl font-bold text-gray-900 mb-1">Past Meetings</h1>
       <p className="text-sm text-gray-500 mb-4">
         Archive of past and manually-archived meetings.

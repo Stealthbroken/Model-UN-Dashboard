@@ -31,11 +31,20 @@ export default async function StatsPage() {
 
   return (
     <div className="max-w-3xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Executive Stats</h1>
-        <p className="text-sm text-gray-500 mt-1">
-          Task completion and attendance across all exec meetings.
-        </p>
+      <div className="mb-6 flex items-start justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Executive Stats</h1>
+          <p className="text-sm text-gray-500 mt-1">
+            Task completion and attendance across all exec meetings.
+          </p>
+        </div>
+        <a
+          href="/api/stats/export"
+          download
+          className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shrink-0"
+        >
+          ⬇ Export CSV
+        </a>
       </div>
 
       {rows.length === 0 ? (

@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { MeetingCreator } from "@/components/MeetingCreator";
+import { MeetingsTabs } from "@/components/MeetingsTabs";
 import { fmtDateLong, fmtTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
@@ -29,13 +30,14 @@ export default async function MeetingsPage({
     orderBy: { date: "asc" },
     include: {
       topicGuide: { select: { id: true } },
-      announcement: true,
+      announcement: { select: { id: true, status: true } },
       _count: { select: { tasks: true } },
     },
   });
 
   return (
     <div>
+      <MeetingsTabs />
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Upcoming Meetings</h1>
