@@ -30,7 +30,7 @@ export default async function TopicsPage({
     <TopicBank
       initial={JSON.parse(JSON.stringify(topics))}
       meetings={JSON.parse(JSON.stringify(meetings))}
-      aiEnabled={!!process.env.OPENAI_API_KEY}
+      aiEnabled={!!process.env.GEMINI_API_KEY}
       docsEnabled={!!process.env.APPS_SCRIPT_URL}
       viewerId={user?.id ?? null}
       focusId={searchParams.focus ?? null}

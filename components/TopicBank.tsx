@@ -318,7 +318,7 @@ export function TopicBank({
     setSuggestions(res.data.suggestions ?? []);
     if (!res.data.aiEnabled) {
       setSuggestNotice(
-        "AI suggestions are off (set OPENAI_API_KEY to enable). Showing curated picks only.",
+        "AI suggestions are off (set GEMINI_API_KEY to enable). Showing curated picks only.",
       );
     }
   }
@@ -418,7 +418,7 @@ export function TopicBank({
             onClick={loadSuggestions}
             disabled={suggesting}
             className="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
-            title={aiEnabled ? "Mix of curated + AI suggestions" : "Curated only — set OPENAI_API_KEY to enable AI"}
+            title={aiEnabled ? "Mix of curated + AI suggestions" : "Curated only — set GEMINI_API_KEY to enable AI"}
           >
             {suggesting ? "Thinking…" : "✨ Suggest topics"}
           </button>

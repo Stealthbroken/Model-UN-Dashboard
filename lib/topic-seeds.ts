@@ -3,7 +3,7 @@
  *
  * Used in two ways:
  *   1. As a baseline pool so the "Suggest topics" button works even when
- *      OpenAI isn't configured.
+ *      Gemini isn't configured.
  *   2. Mixed with AI suggestions so every batch has a couple of vetted picks
  *      alongside the fresh ones.
  *
