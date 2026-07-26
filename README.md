@@ -69,6 +69,30 @@ This uses Google Apps Script so the announcement posts using your school account
 8. Get your **Course ID**: open Google Classroom, go to your class, the ID is in the URL: `https://classroom.google.com/c/COURSE_ID_HERE`
 9. Paste the Course ID into `.env.local` as `CLASSROOM_COURSE_ID`
 
+### Re-authorizing after a script change
+
+**Read this if you see** `You do not have permission to call DocumentApp.create` (or any
+other `...do not have permission to call...` error).
+
+Apps Script works out which Google permissions it needs by scanning the code, and it
+captures them **when you authorize**, not when you deploy. A web app that runs as *you*
+keeps using the permissions it was granted originally — so the first time the script
+calls an API it hasn't been authorized for, it throws that error instead of prompting.
+
+To fix it:
+
+1. Open the script at https://script.google.com
+2. Pick any function in the toolbar dropdown (`doGet` is a safe one) and click **Run**
+3. Accept the consent screen — this is where the new permissions are granted
+4. **Deploy → Manage deployments →** pencil icon **→ Version: New version → Deploy**
+
+Step 4 matters: without a new version the web app keeps serving the old code.
+
+To stop this recurring, paste `appscript/appsscript.json` into the project's manifest
+(**Project Settings → ☑ Show "appsscript.json" manifest file in editor**). It declares
+every scope the worker needs up front — Docs, Drive, Classroom, email, and outbound
+fetch — so one consent covers all of them.
+
 ### Meeting Minutes Docs (Apps Script)
 
 When a meeting is created, the dashboard calls Apps Script to generate a templated Google Doc in your shared drive, pre-filled with date, time, location, attendance table, agenda, weekly tasks per executive, and an action-items table. A link to the doc appears on the meeting page.

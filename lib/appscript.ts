@@ -62,6 +62,25 @@ export async function sendReminderEmail(
   }
 }
 
+/**
+ * Apps Script reports a missing OAuth scope as a raw exception string, e.g.
+ * "You do not have permission to call DocumentApp.create." That's accurate but
+ * gives no idea what to do, and it happens every time the script starts using a
+ * Google API it hasn't been authorized for — so translate it into the fix.
+ */
+function explainScriptError(error: string | undefined): string | undefined {
+  if (!error) return error;
+  if (/do not have permission|required permissions|not authorized|authorization is required/i.test(error)) {
+    return (
+      "Google Apps Script isn't authorized for this yet. Open the script, run any " +
+      "function once to accept the new permissions, then redeploy (Deploy → Manage " +
+      "deployments → edit → New version). See the README's Apps Script section. " +
+      `Original error: ${error}`
+    );
+  }
+  return error;
+}
+
 export interface MinutesDocTask {
   description: string;
   completed: boolean;
@@ -115,7 +134,7 @@ export async function createMinutesDoc(
     const json = await res.json();
     return {
       ok: !!json.ok,
-      error: json.error,
+      error: explainScriptError(json.error),
       docId: json.docId,
       docUrl: json.docUrl,
     };
@@ -166,7 +185,12 @@ export async function createTopicGuideDoc(
     }
 
     const json = await res.json();
-    return { ok: !!json.ok, error: json.error, docId: json.docId, docUrl: json.docUrl };
+    return {
+      ok: !!json.ok,
+      error: explainScriptError(json.error),
+      docId: json.docId,
+      docUrl: json.docUrl,
+    };
   } catch (err: unknown) {
     return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
   }
@@ -199,7 +223,7 @@ export async function updateMinutesDoc(
     });
     if (!res.ok) return { ok: false, error: `Apps Script returned ${res.status}` };
     const json = await res.json();
-    return { ok: !!json.ok, error: json.error };
+    return { ok: !!json.ok, error: explainScriptError(json.error) };
   } catch (err: unknown) {
     return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
   }
