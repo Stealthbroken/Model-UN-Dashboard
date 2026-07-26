@@ -5,6 +5,7 @@ import { ExecutivesManager } from "@/components/ExecutivesManager";
 import { AccountsManager } from "@/components/AccountsManager";
 import { MinutesDocSettings } from "@/components/MinutesDocSettings";
 import { TopicGuideSettings } from "@/components/TopicGuideSettings";
+import { DocTemplatesEditor } from "@/components/DocTemplatesEditor";
 import { DiscordSettings } from "@/components/DiscordSettings";
 import { DigestPanel } from "@/components/DigestPanel";
 import { getCurrentUser, listAccountExecs } from "@/lib/auth";
@@ -14,7 +15,9 @@ import {
   getDiscordWebhookUrl,
   getAllowTeamPassword,
   getTopicGuideFolderId,
+  getDocTemplates,
 } from "@/lib/settings";
+import { DEFAULT_DOC_TEMPLATES } from "@/lib/doc-templates";
 
 export const dynamic = "force-dynamic";
 
@@ -27,14 +30,21 @@ export default async function ExecutivesPage() {
     return <NoAccess />;
   }
 
-  const [execs, settings, discordWebhookUrl, allowTeamPassword, topicGuideFolderId] =
-    await Promise.all([
-      listAccountExecs(),
-      getMinutesDocSettings(),
-      getDiscordWebhookUrl(),
-      getAllowTeamPassword(),
-      getTopicGuideFolderId(),
-    ]);
+  const [
+    execs,
+    settings,
+    discordWebhookUrl,
+    allowTeamPassword,
+    topicGuideFolderId,
+    docTemplates,
+  ] = await Promise.all([
+    listAccountExecs(),
+    getMinutesDocSettings(),
+    getDiscordWebhookUrl(),
+    getAllowTeamPassword(),
+    getTopicGuideFolderId(),
+    getDocTemplates(),
+  ]);
 
   const rosterOrder = [...execs].sort(
     (a, b) =>
@@ -82,6 +92,7 @@ export default async function ExecutivesPage() {
           initialFolderId={topicGuideFolderId}
           docsEnabled={!!process.env.APPS_SCRIPT_URL}
         />
+        <DocTemplatesEditor initial={docTemplates} defaults={DEFAULT_DOC_TEMPLATES} />
         <DiscordSettings initialUrl={discordWebhookUrl} />
         <DigestPanel />
       </div>

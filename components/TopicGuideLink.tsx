@@ -32,10 +32,10 @@ export function TopicGuideLink({
 
   async function generate(replace: boolean) {
     setBusy(true);
-    const res = await api<{ topic: Topic }>(`/api/topics/${topic.id}/guide`, {
-      method: "POST",
-      body: { replace },
-    });
+    const res = await api<{ topic: Topic; note: string | null }>(
+      `/api/topics/${topic.id}/guide`,
+      { method: "POST", body: { replace } },
+    );
     setBusy(false);
 
     if (!res.ok) {
@@ -43,7 +43,11 @@ export function TopicGuideLink({
       return;
     }
     onChange(res.data.topic);
-    toast.success("Topic guide Doc created in Drive.", { copy: res.data.topic.guideUrl ?? undefined });
+    const link = res.data.topic.guideUrl ?? undefined;
+    // A note means Drive couldn't use the configured folder — say so rather
+    // than reporting plain success and leaving them to wonder where it went.
+    if (res.data.note) toast.info(res.data.note, { copy: link });
+    else toast.success("Topic guide Doc created in Drive.", { copy: link });
     router.refresh();
   }
 

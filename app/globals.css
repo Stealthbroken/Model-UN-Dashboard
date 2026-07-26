@@ -16,6 +16,39 @@ body {
   }
 }
 
+/* Template preview. Tailwind's preflight strips heading sizes and list markers,
+   so the generated Doc HTML needs them restored to read like a document. */
+.doc-preview h1 {
+  font-size: 1.35rem;
+  font-weight: 700;
+  margin: 0 0 0.25rem;
+}
+.doc-preview h2 {
+  font-size: 1rem;
+  font-weight: 600;
+  margin: 1rem 0 0.25rem;
+}
+.doc-preview p {
+  margin: 0 0 0.5rem;
+}
+.doc-preview ul {
+  list-style: disc;
+  padding-left: 1.25rem;
+  margin: 0 0 0.5rem;
+}
+.doc-preview li {
+  margin: 0.15rem 0;
+  min-height: 1.2em;
+}
+.doc-preview hr {
+  margin: 0.75rem 0;
+  border-color: #d1d5db;
+}
+.dark .doc-preview h1,
+.dark .doc-preview h2 {
+  color: #93c5fd;
+}
+
 /* Toast entry — slides up from the bottom-right stack. */
 @keyframes toast-in {
   from {

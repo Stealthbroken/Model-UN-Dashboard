@@ -276,7 +276,9 @@ async function setupCollections() {
   await step("collection settings", () =>
     databases.createCollection(DB_ID, "settings", "Settings", COLLECTION_PERMS));
 
-  await str  ("settings", "value", 2_000, false, "");
+  // Doc templates are stored here as JSON, which outgrows the original 2k.
+  await str  ("settings", "value", 8_000, false, "");
+  await updateStr("settings", "value", false, "", 8_000);
 
   // Topic ─────────────────────────────────────────────────
   // Brainstorm bank of MUN topic ideas. Status walks

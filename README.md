@@ -19,9 +19,10 @@ To put the app online for free, see **[DEPLOY.md](DEPLOY.md)**.
 ---
 
 > **Upgrading an existing install?** Re-run `npm run appwrite:setup` after pulling —
-> it's idempotent, and adds the account fields on `executives` plus the topic-guide
-> and voting fields on `topics`. Then re-paste `appscript/ClassroomPoster.gs` into
-> Apps Script and redeploy, for the topic-guide Doc action.
+> it's idempotent, and adds the account fields on `executives`, the topic-guide and
+> voting fields on `topics`, and widens `settings.value` to hold the Doc templates.
+> Then re-paste `appscript/ClassroomPoster.gs` into Apps Script and redeploy a new
+> version, for the HTML-to-Doc action.
 
 ---
 
@@ -71,8 +72,12 @@ This uses Google Apps Script so the announcement posts using your school account
 
 ### Re-authorizing after a script change
 
-**Read this if you see** `You do not have permission to call DocumentApp.create` (or any
-other `...do not have permission to call...` error).
+**Read this if you see** a `...do not have permission to call...` error.
+
+Topic guides no longer need this: they're built as HTML by the dashboard and converted by
+Drive, so they only use the Drive permission the Classroom attachment path already has.
+**Minutes Docs still use `DocumentApp`** and therefore still need the Docs permission —
+if you can't grant it, topic guides will work and minutes Docs won't.
 
 Apps Script works out which Google permissions it needs by scanning the code, and it
 captures them **when you authorize**, not when you deploy. A web app that runs as *you*
@@ -124,6 +129,18 @@ When the dashboard runs on **localhost**, Apps Script can't reach `http://localh
 If a meeting has a **Responsible person email** set in its detail page, and no announcement has been scheduled by ~18 hours before the meeting (i.e. the night before), the dashboard sends that person an email reminder via Apps Script (using `MailApp.sendEmail` from the school account). Each meeting only gets one reminder.
 
 This uses the same Apps Script deployment — no extra setup beyond the Classroom poster.
+
+### Document templates
+
+Headings and prompts for generated Docs are edited in **Sec-Gen Panel → Document templates** — no code change, and no Apps Script redeploy.
+
+**Topic guide** — Doc name prefix, whether the topic's framing and chair notes are copied in, and the section list: add, remove, reorder, and edit each prompt bullet. An empty prompt renders as a blank bullet to type into. There's a live preview against a sample topic.
+
+**Meeting minutes** — the Doc name pattern (`{date}` and `{title}` tokens), which auto-synced sections appear and what they're called (attendance / agenda / weekly tasks), the notes heading, the hint under it, and the action-items table's heading, columns and blank row count.
+
+One caveat on the minutes **notes heading**: it's the boundary between the region the dashboard rebuilds on every sync and the region you type into. The dashboard always looks for the *current* name, so renaming it is safe going forward — but Docs created earlier still contain the old heading. Update the heading in any older Doc you still sync, or that sync will see an unfamiliar layout and rebuild the whole document.
+
+Both templates fall back to the shipped defaults if a stored value is ever malformed, so a bad edit can't stop Docs from generating. **Reset to default** restores either one.
 
 ### Topic Guide Docs (Apps Script)
 

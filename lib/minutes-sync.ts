@@ -1,5 +1,7 @@
 import { prisma, type Task, type MeetingAttendance } from "@/lib/db";
 import { updateMinutesDoc, type MinutesDocData } from "@/lib/appscript";
+import { minutesDocName } from "@/lib/doc-templates";
+import { getMinutesTemplate } from "@/lib/settings";
 
 /**
  * Builds the full minutes-doc snapshot for a meeting: header fields, per-exec
@@ -18,10 +20,13 @@ export async function buildMinutesPayload(
   });
   if (!meeting) return null;
 
-  const execs = await prisma.executive.findMany({
-    where: { active: true },
-    orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
-  });
+  const [execs, template] = await Promise.all([
+    prisma.executive.findMany({
+      where: { active: true },
+      orderBy: [{ sortOrder: "asc" }, { name: "asc" }],
+    }),
+    getMinutesTemplate(),
+  ]);
 
   const attendance = meeting.attendance as MeetingAttendance[];
   const tasks = meeting.tasks as Task[];
@@ -32,6 +37,8 @@ export async function buildMinutesPayload(
     date: meeting.date.toISOString(),
     location: meeting.location,
     agenda: meeting.agenda,
+    template,
+    docName: minutesDocName(template, { title: meeting.title, date: meeting.date }),
     executives: execs.map((e) => ({
       name: e.name,
       role: e.role,

@@ -2,8 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { prisma } from "@/lib/db";
 import { isDenied, requireUser } from "@/lib/auth";
-import { createTopicGuideDoc } from "@/lib/appscript";
-import { getMinutesDocSettings, getTopicGuideFolderId } from "@/lib/settings";
+import { createDocFromHtml } from "@/lib/appscript";
+import { renderTopicGuideHtml, topicGuideDocName } from "@/lib/doc-templates";
+import {
+  getMinutesDocSettings,
+  getTopicGuideFolderId,
+  getTopicGuideTemplate,
+} from "@/lib/settings";
 
 /**
  * POST — generate a pre-formatted Google Docs topic guide for this topic and
@@ -37,18 +42,17 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
 
   // Prefer a dedicated topic-guide folder; fall back to the minutes shared
   // drive so guides at least land somewhere the team already shares.
-  const [folderId, minutes] = await Promise.all([
+  const [folderId, minutes, template] = await Promise.all([
     getTopicGuideFolderId(),
     getMinutesDocSettings(),
+    getTopicGuideTemplate(),
   ]);
   const target = folderId || (minutes.useSharedDrive ? minutes.sharedDriveId : "");
+  const docName = topicGuideDocName(template, topic.title);
 
-  const result = await createTopicGuideDoc({
-    title: topic.title,
-    description: topic.description,
-    category: topic.category,
-    difficulty: topic.difficulty,
-    notes: topic.notes,
+  const result = await createDocFromHtml({
+    name: docName,
+    html: renderTopicGuideHtml(template, topic),
     folderId: target || null,
   });
 
@@ -64,12 +68,15 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
     data: {
       guideUrl: result.docUrl,
       guideDocId: result.docId ?? null,
-      guideTitle: `Topic Guide — ${topic.title}`.slice(0, 280),
+      guideTitle: docName.slice(0, 280),
       guideCreatedAt: new Date(),
     },
   });
 
-  return NextResponse.json({ topic: updated, created: true }, { status: 201 });
+  return NextResponse.json(
+    { topic: updated, created: true, note: result.note ?? null },
+    { status: 201 },
+  );
 }
 
 /** DELETE — unlink the guide. The Google Doc itself is left untouched. */

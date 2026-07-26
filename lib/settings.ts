@@ -1,4 +1,13 @@
 import { prisma } from "@/lib/db";
+import {
+  coerceMinutesTemplate,
+  coerceTopicGuideTemplate,
+  DEFAULT_MINUTES_TEMPLATE,
+  DEFAULT_TOPIC_GUIDE_TEMPLATE,
+  type DocTemplates,
+  type MinutesTemplate,
+  type TopicGuideTemplate,
+} from "@/lib/doc-templates";
 
 export const SETTING_KEYS = {
   useSharedDrive: "useSharedDrive",
@@ -6,6 +15,8 @@ export const SETTING_KEYS = {
   discordWebhookUrl: "discordWebhookUrl",
   allowTeamPassword: "allowTeamPassword",
   topicGuideFolderId: "topicGuideFolderId",
+  topicGuideTemplate: "topicGuideTemplate",
+  minutesTemplate: "minutesTemplate",
 } as const;
 
 export interface MinutesDocSettings {
@@ -104,4 +115,71 @@ export async function setTopicGuideFolderId(id: string): Promise<string> {
     update: { value },
   });
   return value;
+}
+
+/* ───────── Doc templates ─────────
+   Stored as JSON. Anything unparseable or partial falls back to the defaults in
+   lib/doc-templates.ts, because these are read on every Doc creation and a bad
+   value must not be able to break document generation. */
+
+function parseStored(value: string | undefined): unknown {
+  if (!value) return null;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return null;
+  }
+}
+
+export async function getTopicGuideTemplate(): Promise<TopicGuideTemplate> {
+  const row = await prisma.setting.findUnique({
+    where: { key: SETTING_KEYS.topicGuideTemplate },
+  });
+  return coerceTopicGuideTemplate(parseStored(row?.value));
+}
+
+export async function getMinutesTemplate(): Promise<MinutesTemplate> {
+  const row = await prisma.setting.findUnique({
+    where: { key: SETTING_KEYS.minutesTemplate },
+  });
+  return coerceMinutesTemplate(parseStored(row?.value));
+}
+
+export async function getDocTemplates(): Promise<DocTemplates> {
+  const [topicGuide, minutes] = await Promise.all([
+    getTopicGuideTemplate(),
+    getMinutesTemplate(),
+  ]);
+  return { topicGuide, minutes };
+}
+
+export async function setTopicGuideTemplate(
+  template: TopicGuideTemplate,
+): Promise<TopicGuideTemplate> {
+  const value = JSON.stringify(template);
+  await prisma.setting.upsert({
+    where: { key: SETTING_KEYS.topicGuideTemplate },
+    create: { key: SETTING_KEYS.topicGuideTemplate, value },
+    update: { value },
+  });
+  return template;
+}
+
+export async function setMinutesTemplate(template: MinutesTemplate): Promise<MinutesTemplate> {
+  const value = JSON.stringify(template);
+  await prisma.setting.upsert({
+    where: { key: SETTING_KEYS.minutesTemplate },
+    create: { key: SETTING_KEYS.minutesTemplate, value },
+    update: { value },
+  });
+  return template;
+}
+
+/** Restores a template to the shipped default by clearing the stored override. */
+export async function resetTopicGuideTemplate(): Promise<TopicGuideTemplate> {
+  return setTopicGuideTemplate(DEFAULT_TOPIC_GUIDE_TEMPLATE);
+}
+
+export async function resetMinutesTemplate(): Promise<MinutesTemplate> {
+  return setMinutesTemplate(DEFAULT_MINUTES_TEMPLATE);
 }

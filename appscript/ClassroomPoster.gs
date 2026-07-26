@@ -8,9 +8,9 @@
  *  4. action: "updateMinutesDoc"  — Re-sync the managed region of a minutes Doc
  *                                   (header, attendance, agenda, tasks) while
  *                                   leaving the human-written notes untouched.
- *  5. action: "createTopicGuideDoc" — Create a pre-formatted topic guide Doc
- *                                   for a Topic Bank entry (background, key
- *                                   questions, bloc positions, sources).
+ *  5. action: "createDocFromHtml"   — Create a Google Doc from HTML the
+ *                                   dashboard rendered (used for topic
+ *                                   guides). Needs only the Drive scope.
  *
  * SETUP:
  * 1. Create a new project at https://script.google.com (school account).
@@ -29,7 +29,9 @@ function doPost(e) {
     if (action === "email") return handleEmail(data);
     if (action === "createMinutesDoc") return handleCreateMinutesDoc(data);
     if (action === "updateMinutesDoc") return handleUpdateMinutesDoc(data);
-    if (action === "createTopicGuideDoc") return handleCreateTopicGuideDoc(data);
+    if (action === "createDocFromHtml") return handleCreateDocFromHtml(data);
+    // Older dashboard builds used this name for the same thing.
+    if (action === "createTopicGuideDoc") return handleCreateDocFromHtml(data);
     return handleAnnouncement(data);
 
   } catch (err) {
@@ -108,6 +110,33 @@ var MIN_BODY = "#111827";         // near-black — body text
 // Heading text that marks the boundary between the auto-synced region and the
 // human-written region. Everything ABOVE this is rebuilt on every sync.
 var MIN_BOUNDARY = "Discussion Notes";
+var MIN_HUMAN_INTRO = "Type the meeting discussion here — this section is yours " +
+  "and is never overwritten by the dashboard.";
+
+/**
+ * Minutes layout comes from the dashboard (Sec-Gen Panel -> Document
+ * templates). Missing fields fall back to what this script always used, so an
+ * older dashboard build keeps working unchanged.
+ */
+function minutesTemplate(data) {
+  var t = (data && data.template) || {};
+  function s(v, d) { return typeof v === "string" && v.trim() ? v : d; }
+  function b(v) { return v === false ? false : true; }
+  return {
+    includeAttendance: b(t.includeAttendance),
+    attendanceHeading: s(t.attendanceHeading, "Attendance"),
+    includeAgenda: b(t.includeAgenda),
+    agendaHeading: s(t.agendaHeading, "Agenda"),
+    includeTasks: b(t.includeTasks),
+    tasksHeading: s(t.tasksHeading, "Weekly Tasks"),
+    boundaryHeading: s(t.boundaryHeading, MIN_BOUNDARY),
+    humanIntro: s(t.humanIntro, MIN_HUMAN_INTRO),
+    actionItemsHeading: s(t.actionItemsHeading, "Action Items"),
+    actionItemColumns: (t.actionItemColumns && t.actionItemColumns.length)
+      ? t.actionItemColumns : ["Owner", "Action item", "Due"],
+    actionItemRows: typeof t.actionItemRows === "number" ? t.actionItemRows : 4
+  };
+}
 
 function handleCreateMinutesDoc(data) {
   if (!data.title || !data.date) {
@@ -122,9 +151,11 @@ function handleCreateMinutesDoc(data) {
   }
 
   var tz = Session.getScriptTimeZone();
-  // Doc title: day-first date, then the meeting title.
-  var docName =
-    Utilities.formatDate(new Date(data.date), tz, "dd/MM/yyyy") + " — " + data.title;
+  // The dashboard renders the name from the template's title pattern; fall
+  // back to day-first date + title for older callers.
+  var docName = (typeof data.docName === "string" && data.docName.trim())
+    ? data.docName
+    : Utilities.formatDate(new Date(data.date), tz, "dd/MM/yyyy") + " — " + data.title;
 
   var doc;
   if (sharedDriveId) {
@@ -147,7 +178,7 @@ function handleCreateMinutesDoc(data) {
   applyMinutesTheme(body);
 
   var idx = insertManagedSections(body, 0, data);
-  insertHumanRegion(body, idx);
+  insertHumanRegion(body, idx, data);
 
   doc.saveAndClose();
   return jsonResponse({ ok: true, docId: doc.getId(), docUrl: doc.getUrl() });
@@ -168,7 +199,9 @@ function handleUpdateMinutesDoc(data) {
   var body = doc.getBody();
   applyMinutesTheme(body);
 
-  // Find the "Discussion Notes" heading — the start of the human-owned region.
+  // Find the boundary heading, the start of the human-owned region. It comes
+  // from the template, so a renamed heading still matches the live document.
+  var tpl = minutesTemplate(data);
   var boundary = -1;
   var count = body.getNumChildren();
   for (var i = 0; i < count; i++) {
@@ -176,7 +209,7 @@ function handleUpdateMinutesDoc(data) {
     if (child.getType() === DocumentApp.ElementType.PARAGRAPH) {
       var para = child.asParagraph();
       if (para.getHeading() === DocumentApp.ParagraphHeading.HEADING1 &&
-          para.getText() === MIN_BOUNDARY) {
+          para.getText() === tpl.boundaryHeading) {
         boundary = i;
         break;
       }
@@ -188,7 +221,7 @@ function handleUpdateMinutesDoc(data) {
     body.clear();
     applyMinutesTheme(body);
     var ni = insertManagedSections(body, 0, data);
-    insertHumanRegion(body, ni);
+    insertHumanRegion(body, ni, data);
   } else {
     // Replace only the managed region [0, boundary); keep the rest verbatim.
     for (var j = boundary - 1; j >= 0; j--) {
@@ -233,6 +266,7 @@ function headingAttrs(color, size, bold, before, after) {
 
 /* Inserts the auto-synced region at startIndex; returns the next free index. */
 function insertManagedSections(body, startIndex, data) {
+  var tpl = minutesTemplate(data);
   var tz = Session.getScriptTimeZone();
   var idx = startIndex;
   var execs = Array.isArray(data.executives) ? data.executives : [];
@@ -260,7 +294,8 @@ function insertManagedSections(body, startIndex, data) {
   body.insertHorizontalRule(idx++);
 
   // ── Attendance ──
-  body.insertParagraph(idx++, "Attendance")
+  if (tpl.includeAttendance) {
+  body.insertParagraph(idx++, tpl.attendanceHeading)
     .setHeading(DocumentApp.ParagraphHeading.HEADING1);
 
   if (execs.length === 0) {
@@ -289,9 +324,11 @@ function insertManagedSections(body, startIndex, data) {
     mutedLine(body, idx++,
       presentCount + " of " + execs.length + " executives present", 9, true);
   }
+  }
 
   // ── Agenda ──
-  body.insertParagraph(idx++, "Agenda")
+  if (tpl.includeAgenda) {
+  body.insertParagraph(idx++, tpl.agendaHeading)
     .setHeading(DocumentApp.ParagraphHeading.HEADING1);
   if (data.agenda && String(data.agenda).trim()) {
     var lines = String(data.agenda).split(/\r?\n/);
@@ -305,8 +342,11 @@ function insertManagedSections(body, startIndex, data) {
     mutedLine(body, idx++, "No agenda set.", 10, true);
   }
 
+  }
+
   // ── Weekly Tasks ──
-  body.insertParagraph(idx++, "Weekly Tasks")
+  if (tpl.includeTasks) {
+  body.insertParagraph(idx++, tpl.tasksHeading)
     .setHeading(DocumentApp.ParagraphHeading.HEADING1);
   if (execs.length === 0) {
     mutedLine(body, idx++, "No executives on the roster yet.", 10, true);
@@ -327,6 +367,8 @@ function insertManagedSections(body, startIndex, data) {
         }
       }
     }
+  }
+
   }
 
   body.insertHorizontalRule(idx++);
@@ -357,24 +399,24 @@ function insertTaskLine(body, idx, task, tz) {
 }
 
 /* The human-owned region — created once, never overwritten by a sync. */
-function insertHumanRegion(body, startIndex) {
+function insertHumanRegion(body, startIndex, data) {
+  var tpl = minutesTemplate(data);
   var idx = startIndex;
 
-  body.insertParagraph(idx++, MIN_BOUNDARY)
+  body.insertParagraph(idx++, tpl.boundaryHeading)
     .setHeading(DocumentApp.ParagraphHeading.HEADING1);
-  mutedLine(
-    body, idx++,
-    "Type the meeting discussion here — this section is yours and is never " +
-      "overwritten by the dashboard.",
-    10, true
-  );
+  mutedLine(body, idx++, tpl.humanIntro, 10, true);
   body.insertParagraph(idx++, "");
 
-  body.insertParagraph(idx++, "Action Items")
-    .setHeading(DocumentApp.ParagraphHeading.HEADING1);
-  var rows = [["Owner", "Action item", "Due"]];
-  for (var k = 0; k < 4; k++) rows.push(["", "", ""]);
-  styleTable(body.insertTable(idx++, rows));
+  if (tpl.actionItemsHeading && tpl.actionItemRows >= 0) {
+    body.insertParagraph(idx++, tpl.actionItemsHeading)
+      .setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    var rows = [tpl.actionItemColumns];
+    var blank = [];
+    for (var c = 0; c < tpl.actionItemColumns.length; c++) blank.push("");
+    for (var k = 0; k < tpl.actionItemRows; k++) rows.push(blank.slice());
+    styleTable(body.insertTable(idx++, rows));
+  }
 
   return idx;
 }
@@ -418,26 +460,25 @@ function styleTable(table) {
   }
 }
 
-/* ═════════════════ Topic Guide Doc ═════════════════ */
+/* ═════════════════ Generic HTML → Doc ═════════════════ */
 
 /**
- * Creates a research-ready topic guide Doc for a Topic Bank entry.
+ * Creates a Google Doc from HTML supplied by the dashboard.
  *
- * Deliberately avoids DocumentApp. Drive converts an uploaded HTML file into a
- * native Google Doc, so this needs only the Drive scope — the same one the
- * Classroom attachment path already uses. The earlier DocumentApp version
- * required https://www.googleapis.com/auth/documents on top of that, and when
- * that scope isn't granted it fails *after* the empty file exists, leaving an
- * orphan behind. One Drive call either fully succeeds or creates nothing.
+ * Deliberately avoids DocumentApp: Drive converts an uploaded HTML file into a
+ * native Doc using only the drive scope, which the Classroom attachment path
+ * already needs. The old DocumentApp version additionally required
+ * https://www.googleapis.com/auth/documents, and when that scope isn't granted
+ * it failed *after* the empty file existed, leaving an orphan in Drive.
  *
- * The dashboard never re-syncs this Doc, so a create-only path loses nothing:
- * once it exists it belongs to whoever is researching the topic.
+ * Because the dashboard renders the HTML, editing a document template no longer
+ * means touching this script — see the Sec-Gen Panel → Document templates.
  *
- * Expects: { title, description, category, difficulty, notes, folderId }
+ * Expects: { name, html, folderId }
  */
-function handleCreateTopicGuideDoc(data) {
-  if (!data.title) {
-    return jsonResponse({ ok: false, error: "Missing title" });
+function handleCreateDocFromHtml(data) {
+  if (!data.name || !data.html) {
+    return jsonResponse({ ok: false, error: "Missing name or html" });
   }
 
   var folderId = (data.folderId || "").trim();
@@ -447,25 +488,21 @@ function handleCreateTopicGuideDoc(data) {
     ).trim();
   }
 
-  var docName = "Topic Guide — " + data.title;
-  var blob = Utilities.newBlob(buildTopicGuideHtml(data), "text/html", docName + ".html");
+  var blob = Utilities.newBlob(data.html, "text/html", data.name + ".html");
   var note = "";
-
   var file;
+
   try {
-    file = createConvertedDoc(docName, blob, folderId);
+    file = createConvertedDoc(data.name, blob, folderId);
   } catch (err) {
-    // A bad/inaccessible folder id shouldn't cost the whole guide — retry in
-    // the script owner's My Drive and tell the dashboard where it landed.
-    if (folderId) {
-      try {
-        file = createConvertedDoc(docName, blob, "");
-        note = "Couldn't write to the configured folder, so the guide was created in My Drive instead.";
-      } catch (fallbackErr) {
-        return jsonResponse({ ok: false, error: String(fallbackErr) });
-      }
-    } else {
-      return jsonResponse({ ok: false, error: String(err) });
+    // A bad or inaccessible folder id shouldn't cost the whole document —
+    // retry in the script owner's My Drive and say where it ended up.
+    if (!folderId) return jsonResponse({ ok: false, error: String(err) });
+    try {
+      file = createConvertedDoc(data.name, blob, "");
+      note = "Couldn't write to the configured folder, so it was created in My Drive instead.";
+    } catch (fallbackErr) {
+      return jsonResponse({ ok: false, error: String(fallbackErr) });
     }
   }
 
@@ -485,82 +522,6 @@ function createConvertedDoc(docName, blob, folderId) {
     supportsAllDrives: true,
     fields: "id,webViewLink"
   });
-}
-
-/**
- * The guide skeleton as HTML. Drive's converter honours headings, lists, bold,
- * italics and inline colours, which covers everything the DocumentApp version
- * styled by hand. Prompts are grey italics so typed-over text reads normally.
- */
-function buildTopicGuideHtml(data) {
-  var tz = Session.getScriptTimeZone();
-  var h = [];
-
-  h.push('<meta charset="utf-8">');
-  h.push('<h1 style="color:' + MIN_ACCENT + '">Topic Guide</h1>');
-  h.push('<h2 style="color:' + MIN_MUTED + ';font-weight:normal">' + esc(data.title) + '</h2>');
-
-  var meta = [];
-  if (data.category) meta.push(esc(data.category));
-  if (data.difficulty) meta.push(esc(titleCase(data.difficulty)) + " level");
-  meta.push("Created " + Utilities.formatDate(new Date(), tz, "dd/MM/yyyy"));
-  h.push('<p style="color:' + MIN_MUTED + ';font-size:10pt">' + meta.join(" &nbsp;·&nbsp; ") + "</p>");
-  h.push("<hr>");
-
-  if (data.description && String(data.description).trim()) {
-    h.push('<h2 style="color:' + MIN_ACCENT + '">The Question</h2>');
-    h.push("<p>" + esc(String(data.description).trim()) + "</p>");
-  }
-  if (data.notes && String(data.notes).trim()) {
-    h.push('<h2 style="color:' + MIN_ACCENT + '">Chair Notes</h2>');
-    h.push('<p style="color:' + MIN_MUTED + '"><i>' + esc(String(data.notes).trim()) + "</i></p>");
-  }
-
-  var sections = [
-    ["Background", [
-      "How did this issue arise? Give delegates the 5-minute version.",
-      "Key dates and turning points.",
-      "Which bodies or treaties already govern it?"
-    ]],
-    ["Current Situation", [
-      "What is the state of play right now?",
-      "What has been tried, and why hasn't it settled the matter?"
-    ]],
-    ["Key Questions for Debate", ["", "", ""]],
-    ["Bloc Positions", [
-      "Bloc / country — position, motivation, red lines.",
-      "", ""
-    ]],
-    ["Points to Research", [
-      "Statistics or precedents worth having on hand.",
-      "Likely counter-arguments to prepare for."
-    ]],
-    ["Sources", ["Link — one line on why it's useful.", ""]],
-    ["Glossary", ["Term — plain-English definition."]]
-  ];
-
-  for (var i = 0; i < sections.length; i++) {
-    h.push('<h2 style="color:' + MIN_ACCENT + '">' + sections[i][0] + "</h2>");
-    h.push("<ul>");
-    var bullets = sections[i][1];
-    for (var b = 0; b < bullets.length; b++) {
-      if (bullets[b]) {
-        h.push('<li style="color:' + MIN_MUTED + '"><i>' + esc(bullets[b]) + "</i></li>");
-      } else {
-        h.push("<li></li>");
-      }
-    }
-    h.push("</ul>");
-  }
-
-  return h.join("\n");
-}
-
-function esc(s) {
-  return String(s == null ? "" : s)
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
 }
 
 /* ───────── Helpers ───────── */

@@ -1,3 +1,5 @@
+import type { MinutesTemplate } from "@/lib/doc-templates";
+
 interface PostAnnouncementOptions {
   body: string;
   materialUrl?: string | null;
@@ -103,6 +105,15 @@ export interface MinutesDocData {
   location: string;
   agenda?: string | null;
   executives: MinutesDocExecutive[];
+  /**
+   * Layout from the Sec-Gen Panel. Sent on update as well as create, because
+   * the sync has to look for the *current* boundary heading to know which part
+   * of the Doc it owns — a renamed heading would otherwise make it rebuild the
+   * whole document and wipe the typed notes.
+   */
+  template?: MinutesTemplate;
+  /** Pre-rendered Doc name from the template's title pattern. */
+  docName?: string;
 }
 
 export async function createMinutesDoc(
@@ -123,6 +134,8 @@ export async function createMinutesDoc(
         agenda: data.agenda || null,
         executives: data.executives,
         sharedDriveId: data.sharedDriveId || null,
+        template: data.template || null,
+        docName: data.docName || null,
       }),
     });
 
@@ -143,23 +156,25 @@ export async function createMinutesDoc(
   }
 }
 
-export interface TopicGuideDocData {
-  title: string;
-  description?: string | null;
-  category?: string | null;
-  difficulty?: string | null;
-  notes?: string | null;
-  /** Drive folder to create the Doc in. Falls back to the script's My Drive. */
+export interface CreateDocFromHtmlData {
+  /** Doc name, without an extension. */
+  name: string;
+  /** Full document body as HTML — Drive converts it to a native Doc. */
+  html: string;
+  /** Drive folder to create it in. Falls back to the script owner's My Drive. */
   folderId?: string | null;
 }
 
 /**
- * Creates a pre-formatted topic guide Doc for a Topic Bank entry. Unlike the
- * minutes Docs there's no re-sync — once created the Doc belongs entirely to
- * whoever is researching the topic.
+ * Creates a Google Doc from HTML rendered by the dashboard.
+ *
+ * The document layout lives in lib/doc-templates.ts rather than in the Apps
+ * Script, so editing a template never requires redeploying the script. It also
+ * only needs the Drive scope: the previous DocumentApp approach additionally
+ * required auth/documents, which isn't always grantable.
  */
-export async function createTopicGuideDoc(
-  data: TopicGuideDocData,
+export async function createDocFromHtml(
+  data: CreateDocFromHtmlData,
 ): Promise<{ ok: boolean; error?: string; docId?: string; docUrl?: string; note?: string }> {
   const url = process.env.APPS_SCRIPT_URL;
   if (!url) return { ok: false, error: "Apps Script URL not configured" };
@@ -169,12 +184,9 @@ export async function createTopicGuideDoc(
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        action: "createTopicGuideDoc",
-        title: data.title,
-        description: data.description || null,
-        category: data.category || null,
-        difficulty: data.difficulty || null,
-        notes: data.notes || null,
+        action: "createDocFromHtml",
+        name: data.name,
+        html: data.html,
         folderId: data.folderId || null,
       }),
     });
@@ -221,6 +233,7 @@ export async function updateMinutesDoc(
         location: data.location,
         agenda: data.agenda || null,
         executives: data.executives,
+        template: data.template || null,
       }),
     });
     if (!res.ok) return { ok: false, error: `Apps Script returned ${res.status}` };
