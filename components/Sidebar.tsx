@@ -23,18 +23,16 @@ interface NavItem {
 const dashboardNav: NavItem[] = [
   { href: "/", icon: "🏠", label: "Dashboard" },
   { href: "/meetings", icon: "📅", label: "Meetings" },
-  { href: "/calendar", icon: "🗓️", label: "Calendar" },
-  { href: "/archive", icon: "🗂️", label: "Past Meetings" },
   { href: "/my-tasks", icon: "✅", label: "My Tasks" },
   { href: "/topics", icon: "💡", label: "Topic Bank" },
-  { href: "/stats", icon: "📊", label: "Exec Stats" },
-  { href: "/instagram", icon: "📷", label: "Instagram" },
+  //{ href: "/stats", icon: "📊", label: "Exec Stats" },
+  //{ href: "/instagram", icon: "📷", label: "Instagram" },
   { href: "/executives", icon: "🔑", label: "Sec-Gen Panel", secgenOnly: true },
 ];
 
 const shortcuts: NavItem[] = [
-  { href: "https://app.slack.com/client/T09DZJJ5UE5", icon: "💬", label: "Slack", external: true },
-  { href: "https://classroom.google.com/u/0/c/NDI4NzY3NDUzNzNa", icon: "📚", label: "Classroom", external: true },
+  //{ href: "https://app.slack.com/client/T09DZJJ5UE5", icon: "💬", label: "Slack", external: true },
+  { href: "https://classroom.google.com/u/0/c/NDI4NzY3NDUzNzNa", icon: "🏫", label: "Classroom", external: true },
   { href: "https://drive.google.com/drive/u/0/folders/1K5Q-qlF0RIVPJGQaIViOYQQTHYpJrR_x", icon: "🗄️", label: "Drive", external: true },
 ];
 
