@@ -1,5 +1,21 @@
 import type { MinutesTemplate } from "@/lib/doc-templates";
 
+/**
+ * The Apps Script web app must be deployed with "Who has access: Anyone" so the
+ * dashboard can reach it (Google can't authenticate our anonymous server call).
+ * That means the deployment URL is the only thing standing between the public
+ * and actions that send mail from the school account or post to Classroom.
+ *
+ * So we add a shared secret: the dashboard signs every request with
+ * APPS_SCRIPT_SECRET, and the script rejects anything whose secret doesn't match
+ * its SHARED_SECRET script property. Set both to the same value to lock it down.
+ * If either side is unset the script stays open (for first-run), so configure it.
+ */
+function withSecret(payload: Record<string, unknown>): string {
+  const secret = process.env.APPS_SCRIPT_SECRET;
+  return JSON.stringify(secret ? { ...payload, secret } : payload);
+}
+
 interface PostAnnouncementOptions {
   body: string;
   materialUrl?: string | null;
@@ -20,7 +36,7 @@ export async function postToClassroom(
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+      body: withSecret({
         action: "announce",
         courseId,
         body: opts.body,
@@ -53,7 +69,7 @@ export async function sendReminderEmail(
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "email", to, subject, body }),
+      body: withSecret({ action: "email", to, subject, body }),
     });
 
     if (!res.ok) return { ok: false, error: `Apps Script returned ${res.status}` };
@@ -126,7 +142,7 @@ export async function createMinutesDoc(
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+      body: withSecret({
         action: "createMinutesDoc",
         title: data.title,
         date: data.date,
@@ -183,7 +199,7 @@ export async function createDocFromHtml(
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+      body: withSecret({
         action: "createDocFromHtml",
         name: data.name,
         html: data.html,
@@ -225,7 +241,7 @@ export async function updateMinutesDoc(
     const res = await fetch(url, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+      body: withSecret({
         action: "updateMinutesDoc",
         docId,
         title: data.title,

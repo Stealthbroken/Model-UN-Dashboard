@@ -24,6 +24,12 @@
 function doPost(e) {
   try {
     var data = JSON.parse(e.postData.contents);
+
+    // The web app is deployed public ("Anyone"), so authorize by shared secret.
+    if (!secretOk(data)) {
+      return jsonResponse({ ok: false, error: "Unauthorized: shared secret missing or incorrect." });
+    }
+
     var action = data.action || "announce";
 
     if (action === "email") return handleEmail(data);
@@ -41,6 +47,29 @@ function doPost(e) {
 
 function doGet() {
   return jsonResponse({ status: "MUN Dashboard worker running" });
+}
+
+/**
+ * Shared-secret check. Set a SHARED_SECRET script property (Project Settings ->
+ * Script properties) to the same value as the dashboard's APPS_SCRIPT_SECRET.
+ *
+ * If SHARED_SECRET is unset the worker stays open, so a fresh deployment keeps
+ * working before it's configured — set it to lock the endpoint down. Once set,
+ * every request must carry a matching `secret`.
+ */
+function secretOk(data) {
+  var expected = (PropertiesService.getScriptProperties().getProperty("SHARED_SECRET") || "").trim();
+  if (!expected) return true;
+  var provided = (data && typeof data.secret === "string") ? data.secret : "";
+  return constantTimeEquals(provided, expected);
+}
+
+/* Length-checked constant-time compare, so a wrong secret can't be timed out. */
+function constantTimeEquals(a, b) {
+  if (a.length !== b.length) return false;
+  var diff = 0;
+  for (var i = 0; i < a.length; i++) diff |= (a.charCodeAt(i) ^ b.charCodeAt(i));
+  return diff === 0;
 }
 
 /* ───────── Announcement posting ───────── */

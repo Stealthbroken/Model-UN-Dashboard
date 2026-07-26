@@ -35,6 +35,9 @@ services:
         sync: false
       - key: APPS_SCRIPT_URL
         sync: false
+      # Must match the SHARED_SECRET script property in the Apps Script project.
+      - key: APPS_SCRIPT_SECRET
+        sync: false
       - key: CLASSROOM_COURSE_ID
         sync: false
       - key: INSTAGRAM_ACCESS_TOKEN

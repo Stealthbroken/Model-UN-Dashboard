@@ -64,11 +64,24 @@ This uses Google Apps Script so the announcement posts using your school account
 5. Click **Deploy** > **New Deployment**
    - Type: **Web App**
    - Execute as: **Me** (your school account)
-   - Who has access: **Anyone**
+   - Who has access: **Anyone**  ← required; the dashboard calls it anonymously, so "Only myself" or "Anyone within <your school>" returns 401
 6. Click **Deploy** and authorize when prompted
 7. Copy the **Web App URL** — paste it into `.env.local` as `APPS_SCRIPT_URL`
 8. Get your **Course ID**: open Google Classroom, go to your class, the ID is in the URL: `https://classroom.google.com/c/COURSE_ID_HERE`
 9. Paste the Course ID into `.env.local` as `CLASSROOM_COURSE_ID`
+
+### Lock down the web app with a shared secret
+
+Because access is **Anyone**, the deployment URL is the only thing stopping a stranger who finds it from sending email as your school account or posting to Classroom. Add a shared secret so the worker only answers the dashboard:
+
+1. Generate a random value:
+   ```bash
+   node -e "console.log(require('crypto').randomBytes(24).toString('base64url'))"
+   ```
+2. In the dashboard, set it as `APPS_SCRIPT_SECRET` (in `.env.local`, and in Render for production).
+3. In the Apps Script project: **Project Settings → Script properties → Add script property**, name `SHARED_SECRET`, value the *same* string. Save.
+
+The dashboard signs every request with the secret; the worker rejects anything that doesn't match. Until `SHARED_SECRET` is set the worker stays open (so a fresh deploy works before you configure it), so don't skip this. If you rotate it, change both sides — a mismatch makes every Apps Script feature fail with "Unauthorized".
 
 ### Re-authorizing after a script change
 
