@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { syncMinutesDoc } from "@/lib/minutes-sync";
+import { requireUser, isDenied } from "@/lib/auth";
 
 function normalizePriority(p?: string): "high" | "medium" | "low" {
   return p === "high" || p === "low" ? p : "medium";
@@ -17,6 +18,9 @@ function parseDueDate(v: unknown): Date | null {
 
 // GET /api/tasks?executiveId=N — all tasks for one executive, with meeting info.
 export async function GET(request: NextRequest) {
+  const gate = await requireUser();
+  if (isDenied(gate)) return gate.error;
+
   const executiveId = request.nextUrl.searchParams.get("executiveId");
   if (!executiveId) {
     return NextResponse.json({ error: "executiveId is required" }, { status: 400 });
@@ -32,6 +36,9 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const gate = await requireUser();
+  if (isDenied(gate)) return gate.error;
+
   const data = await request.json();
   const meetingId = typeof data.meetingId === "string" ? data.meetingId : "";
   const executiveId = typeof data.executiveId === "string" ? data.executiveId : "";

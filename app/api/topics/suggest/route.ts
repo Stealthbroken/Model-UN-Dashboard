@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma, type Topic } from "@/lib/db";
 import { TOPIC_SEEDS, TOPIC_CATEGORIES, type SeedTopic } from "@/lib/topic-seeds";
 import { openAiChat, openAiConfigured } from "@/lib/openai";
+import { requireUser, isDenied } from "@/lib/auth";
 
 const BATCH_SIZE       = 5;
 const FROM_CURATED     = 2;            // baseline picks from the vetted list
@@ -27,6 +28,9 @@ interface Suggestion {
  *     curated list so the UI never sees an empty response.
  */
 export async function POST() {
+  const gate = await requireUser();
+  if (isDenied(gate)) return gate.error;
+
   const existing = await prisma.topic.findMany();
   const existingNorm = new Set(
     (existing as Topic[]).map((t) => t.title.toLowerCase().trim()),

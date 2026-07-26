@@ -1,7 +1,8 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { sendReminderEmail } from "@/lib/appscript";
 import { fmtDateLong, fmtTime } from "@/lib/format";
+import { denyCron } from "@/lib/cron-auth";
 
 /**
  * Sends reminder emails to the responsible person if a meeting's classroom
@@ -12,7 +13,10 @@ import { fmtDateLong, fmtTime } from "@/lib/format";
  *
  * Idempotent: each meeting gets one reminder via reminderSentAt.
  */
-export async function POST() {
+export async function POST(request: NextRequest) {
+  const denied = denyCron(request);
+  if (denied) return denied;
+
   const now = new Date();
   const eighteenHoursOut = new Date(now.getTime() + 18 * 60 * 60 * 1000);
 

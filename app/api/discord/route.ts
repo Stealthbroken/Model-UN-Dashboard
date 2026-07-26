@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/session";
+import { requireUser, isDenied } from "@/lib/auth";
 import { getDiscordWebhookUrl } from "@/lib/settings";
 
 // Discord caps webhook message content at 2000 characters.
@@ -11,10 +11,8 @@ const DISCORD_LIMIT = 2000;
  * Body: { body: string, announcementId?: number }
  */
 export async function POST(request: NextRequest) {
-  const session = await getSession();
-  if (!session.isLoggedIn) {
-    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
-  }
+  const gate = await requireUser();
+  if (isDenied(gate)) return gate.error;
 
   const data = await request.json();
   const text = typeof data.body === "string" ? data.body.trim() : "";

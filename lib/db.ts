@@ -79,11 +79,20 @@ export interface InstagramPost {
 export interface Executive {
   id: string;
   name: string;
-  role: string;
+  role: string;               // job title on the roster, e.g. "Director of Logistics"
   email: string | null;
-  active: boolean;
+  active: boolean;            // on the roster / offered in new meetings
   sortOrder: number;
   createdAt: Date;
+  // ── Account fields (null until a Sec-Gen provisions a login) ──
+  username: string | null;
+  passwordHash: string | null;
+  accountRole: string;        // "member" | "secgen" | "owner" — see lib/session.ts
+  accountActive: boolean;     // login enabled; independent of roster `active`
+  inviteTokenHash: string | null;
+  inviteSentAt: Date | null;
+  inviteExpiresAt: Date | null;
+  lastLoginAt: Date | null;
 }
 
 export interface MeetingAttendance {
@@ -124,6 +133,14 @@ export interface Topic {
   usedAt: Date | null;
   createdAt: Date;
   source: string;              // "manual" | "ai" | "curated"
+  // ── Google Docs topic guide: pasted in, or generated via Apps Script ──
+  guideUrl: string | null;
+  guideDocId: string | null;   // set only for Docs the dashboard created
+  guideTitle: string | null;
+  guideCreatedAt: Date | null;
+  // ── Team ranking: one vote per account ──
+  voters: string[];            // executive ids
+  voteCount: number;
 }
 
 type AnyDoc = Models.Document & Record<string, unknown>;
@@ -157,8 +174,8 @@ const META = {
   },
   executive: {
     collection: COLLECTIONS.executive,
-    dateFields: ["createdAt"],
-    defaults: { role: "", active: true, sortOrder: 0 },
+    dateFields: ["createdAt", "inviteSentAt", "inviteExpiresAt", "lastLoginAt"],
+    defaults: { role: "", active: true, sortOrder: 0, accountRole: "member", accountActive: true },
   },
   meetingAttendance: {
     collection: COLLECTIONS.meetingAttendance,
@@ -177,8 +194,11 @@ const META = {
   },
   topic: {
     collection: COLLECTIONS.topic,
-    dateFields: ["usedAt", "createdAt"],
-    defaults: { description: "", category: "", difficulty: "standard", status: "idea", notes: "", source: "manual" },
+    dateFields: ["usedAt", "createdAt", "guideCreatedAt"],
+    defaults: {
+      description: "", category: "", difficulty: "standard", status: "idea", notes: "",
+      source: "manual", voters: [], voteCount: 0,
+    },
   },
 } as const satisfies Record<string, ModelMeta>;
 
@@ -481,22 +501,27 @@ async function expandIncludes(
   if (include._count?.select) {
     const sel = include._count.select;
     for (const row of rows) row._count = {} as Record<string, number>;
-    if (sel.tasks) {
-      const counts = await Promise.all(
-        ids.map((id) => databases.listDocuments(DB_ID, COLLECTIONS.task, [
-          Query.equal("meetingId", id), Query.limit(1),
-        ]).then((r) => r.total)),
-      );
-      rows.forEach((r, i) => { (r._count as Record<string, number>).tasks = counts[i]; });
-    }
-    if (sel.attendance) {
-      const counts = await Promise.all(
-        ids.map((id) => databases.listDocuments(DB_ID, COLLECTIONS.meetingAttendance, [
-          Query.equal("meetingId", id), Query.limit(1),
-        ]).then((r) => r.total)),
-      );
-      rows.forEach((r, i) => { (r._count as Record<string, number>).attendance = counts[i]; });
-    }
+    if (ids.length === 0) return;
+
+    // One query per counted relation, not one per row. The previous shape
+    // issued a listDocuments call for every row, so a 20-meeting list cost 40
+    // extra round-trips just to render "n tasks".
+    const countRelation = async (collection: string, key: string) => {
+      const children = await listAll(collection, [Query.equal("meetingId", ids as never)]);
+      const tally = new Map<string, number>();
+      for (const c of children) {
+        const pid = c.meetingId as string;
+        tally.set(pid, (tally.get(pid) ?? 0) + 1);
+      }
+      for (const row of rows) {
+        (row._count as Record<string, number>)[key] = tally.get(row.id as string) ?? 0;
+      }
+    };
+
+    await Promise.all([
+      sel.tasks ? countRelation(COLLECTIONS.task, "tasks") : null,
+      sel.attendance ? countRelation(COLLECTIONS.meetingAttendance, "attendance") : null,
+    ]);
   }
 }
 

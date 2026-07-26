@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { syncMinutesDoc } from "@/lib/minutes-sync";
+import { requireUser, isDenied } from "@/lib/auth";
 
 function normalizePriority(p?: string): "high" | "medium" | "low" {
   return p === "high" || p === "low" ? p : "medium";
@@ -19,6 +20,9 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const gate = await requireUser();
+  if (isDenied(gate)) return gate.error;
+
   const id = params.id;
   if (!id) return NextResponse.json({ error: "Bad id" }, { status: 400 });
 
@@ -61,6 +65,9 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const gate = await requireUser();
+  if (isDenied(gate)) return gate.error;
+
   const id = params.id;
   if (!id) return NextResponse.json({ error: "Bad id" }, { status: 400 });
   // Capture the meeting before deleting so the minutes doc can be re-synced.

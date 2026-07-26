@@ -4,6 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { RichTextEditor } from "@/components/RichTextEditor";
+import { api } from "@/lib/client-api";
+import { useToast } from "@/components/Toast";
 import { fmtDate, fmtDateCompact, fmtDateLong, fmtTime } from "@/lib/format";
 
 interface TopicGuide {
@@ -190,6 +192,7 @@ function AttendanceSection({
   executives: Executive[];
   onChange: () => void;
 }) {
+  const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
 
   const presentMap = new Map<string, boolean>();
@@ -198,12 +201,17 @@ function AttendanceSection({
 
   async function toggle(executiveId: string, present: boolean) {
     setBusy(executiveId);
-    await fetch(`/api/meetings/${meeting.id}/attendance`, {
+    const res = await api(`/api/meetings/${meeting.id}/attendance`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ executiveId, present }),
+      body: { executiveId, present },
     });
     setBusy(null);
+
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success("Attendance saved.");
     onChange();
   }
 
@@ -259,6 +267,7 @@ function ExecutivesTasksSection({
   previousUnfinishedCount: number;
   onChange: () => void;
 }) {
+  const toast = useToast();
   const [busy, setBusy] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -287,63 +296,88 @@ function ExecutivesTasksSection({
 
   async function toggleTask(task: Task) {
     setBusy(`toggle-${task.id}`);
-    await fetch(`/api/tasks/${task.id}`, {
+    const res = await api(`/api/tasks/${task.id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ completed: !task.completed }),
+      body: { completed: !task.completed },
     });
     setBusy(null);
+
+    // No success toast — checkboxes flip often enough that it'd just be noise.
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
     onChange();
   }
 
   async function addTask(executiveId: string, payload: NewTaskInput) {
     if (!payload.description.trim()) return;
     setBusy(`add-${executiveId}`);
-    await fetch("/api/tasks", {
+    const res = await api("/api/tasks", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+      body: {
         meetingId: meeting.id,
         executiveId,
         description: payload.description,
         priority: payload.priority,
         dueDate: payload.dueDate || null,
         label: payload.label || null,
-      }),
+      },
     });
     setBusy(null);
+
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success("Task added.");
     onChange();
   }
 
   async function editTask(taskId: string, patch: Record<string, unknown>) {
     setBusy(`edit-${taskId}`);
-    await fetch(`/api/tasks/${taskId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
+    const res = await api(`/api/tasks/${taskId}`, { method: "PATCH", body: patch });
     setBusy(null);
+
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success("Task updated.");
     onChange();
   }
 
   async function deleteTask(taskId: string) {
     setBusy(`del-${taskId}`);
-    await fetch(`/api/tasks/${taskId}`, { method: "DELETE" });
+    const res = await api(`/api/tasks/${taskId}`, { method: "DELETE" });
     setBusy(null);
+
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success("Task deleted.");
     onChange();
   }
 
   async function copyFromLast() {
     setBusy("copy");
     setMessage(null);
-    const res = await fetch(`/api/meetings/${meeting.id}/copy-tasks`, { method: "POST" });
-    const data = await res.json();
-    setMessage(
-      data.copied
-        ? `Copied ${data.copied} unfinished task${data.copied === 1 ? "" : "s"} from the last meeting.`
-        : data.message || "Nothing to copy.",
+    const res = await api<{ copied?: number; message?: string }>(
+      `/api/meetings/${meeting.id}/copy-tasks`,
+      { method: "POST" },
     );
     setBusy(null);
+
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    const summary = res.data.copied
+      ? `Copied ${res.data.copied} unfinished task${res.data.copied === 1 ? "" : "s"} from the last meeting.`
+      : res.data.message || "Nothing to copy.";
+    setMessage(summary);
+    if (res.data.copied) toast.success(summary);
     onChange();
   }
 
@@ -714,6 +748,7 @@ function MinutesDocSection({
   meeting: Meeting;
   onChange: () => void;
 }) {
+  const toast = useToast();
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -728,12 +763,16 @@ function MinutesDocSection({
     }
     setCreating(true);
     setError(null);
-    const res = await fetch(`/api/meetings/${meeting.id}/minutes`, { method: "POST" });
-    const data = await res.json();
-    if (!res.ok || !data.ok) {
-      setError(data.error || "Failed to create minutes doc.");
-    }
+    const res = await api(`/api/meetings/${meeting.id}/minutes`, { method: "POST" });
     setCreating(false);
+
+    if (!res.ok) {
+      // Kept in-place as well: Apps Script errors usually need a config fix.
+      setError(res.error);
+      toast.error(res.error);
+      return;
+    }
+    toast.success("Minutes doc created.");
     onChange();
   }
 
@@ -798,6 +837,7 @@ function MinutesDocSection({
 /* ───────────── Meeting Header ───────────── */
 function MeetingHeader({ meeting, onUpdate }: { meeting: Meeting; onUpdate: () => void }) {
   const router = useRouter();
+  const toast = useToast();
   const [editing, setEditing] = useState(false);
   const [form, setForm] = useState({
     title: meeting.title,
@@ -812,21 +852,29 @@ function MeetingHeader({ meeting, onUpdate }: { meeting: Meeting; onUpdate: () =
   const isExec = meeting.type === "exec";
 
   async function save() {
-    await fetch(`/api/meetings/${meeting.id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
+    const res = await api(`/api/meetings/${meeting.id}`, { method: "PATCH", body: form });
+
+    if (!res.ok) {
+      // Stay in edit mode so the typed-but-unsaved values aren't thrown away.
+      toast.error(res.error);
+      return;
+    }
     setEditing(false);
+    toast.success("Meeting updated.");
     onUpdate();
   }
 
   async function archiveToggle() {
-    await fetch(`/api/meetings/${meeting.id}`, {
+    const res = await api(`/api/meetings/${meeting.id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: isArchived ? "unarchive" : "archive" }),
+      body: { action: isArchived ? "unarchive" : "archive" },
     });
+
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success(isArchived ? "Meeting unarchived." : "Meeting archived.");
     onUpdate();
   }
 
@@ -837,8 +885,14 @@ function MeetingHeader({ meeting, onUpdate }: { meeting: Meeting; onUpdate: () =
       )
     )
       return;
-    const res = await fetch(`/api/meetings/${meeting.id}`, { method: "DELETE" });
-    if (res.ok) router.push("/meetings");
+    const res = await api(`/api/meetings/${meeting.id}`, { method: "DELETE" });
+
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success("Meeting deleted.");
+    router.push("/meetings");
   }
 
   return (
@@ -986,6 +1040,7 @@ function TopicGuideSection({
   guide: TopicGuide | null;
   onChange: () => void;
 }) {
+  const toast = useToast();
   const [uploading, setUploading] = useState(false);
 
   async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
@@ -995,18 +1050,28 @@ function TopicGuideSection({
     const formData = new FormData();
     formData.append("file", file);
     formData.append("meetingId", String(meetingId));
-    await fetch("/api/topic-guide", { method: "POST", body: formData });
+    // Multipart upload, so this one can't go through `api` — it JSON-encodes bodies.
+    const res = await fetch("/api/topic-guide", { method: "POST", body: formData });
     setUploading(false);
+
+    if (!res.ok) {
+      const data = await res.json().catch(() => null);
+      toast.error(data?.error || "Upload failed. Try again.");
+      return;
+    }
+    toast.success("Topic guide uploaded.");
     onChange();
   }
 
   async function handleDelete() {
     if (!guide) return;
-    await fetch("/api/topic-guide", {
-      method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: guide.id }),
-    });
+    const res = await api("/api/topic-guide", { method: "DELETE", body: { id: guide.id } });
+
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    toast.success("Topic guide removed.");
     onChange();
   }
 
@@ -1045,6 +1110,7 @@ function ClassroomSection({
   defaultTime: string;
   onChange: () => void;
 }) {
+  const toast = useToast();
   const [body, setBody] = useState(announcement?.body || "");
   const [scheduledFor, setScheduledFor] = useState(
     announcement?.scheduledFor
@@ -1060,20 +1126,25 @@ function ClassroomSection({
   async function save(action: "draft" | "schedule") {
     setSaving(action);
     setMessage(null);
-    const res = await fetch("/api/classroom", {
+    const res = await api("/api/classroom", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+      body: {
         meetingId,
         body,
         scheduledFor: action === "schedule" ? scheduledFor : null,
         status: action === "schedule" ? "pending" : "draft",
-      }),
+      },
     });
-    const data = await res.json();
-    if (data.error) setMessage(`Error: ${data.error}`);
-    else setMessage(action === "schedule" ? "Scheduled." : "Draft saved.");
     setSaving(null);
+
+    if (!res.ok) {
+      setMessage(`Error: ${res.error}`);
+      toast.error(res.error);
+      return;
+    }
+    const done = action === "schedule" ? "Scheduled." : "Draft saved.";
+    setMessage(done);
+    toast.success(done);
     onChange();
   }
 
@@ -1083,30 +1154,36 @@ function ClassroomSection({
       ? "Remove this from the dashboard? The post will stay live in Google Classroom — this only frees up the slot here so you can plan a new one."
       : "Delete this announcement?";
     if (!confirm(msg)) return;
-    await fetch("/api/classroom", {
+    const res = await api("/api/classroom", {
       method: "DELETE",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id: announcement.id }),
+      body: { id: announcement.id },
     });
+
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
     setBody("");
+    toast.success(locked ? "Removed from the dashboard." : "Announcement deleted.");
     onChange();
   }
 
   async function mirrorToDiscord() {
     setMirroring(true);
     setMessage(null);
-    const res = await fetch("/api/discord", {
+    const res = await api("/api/discord", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ body, announcementId: announcement?.id ?? null }),
+      body: { body, announcementId: announcement?.id ?? null },
     });
-    const data = await res.json();
-    if (!res.ok || data.error) {
-      setMessage(`Error: ${data.error || "Discord mirror failed"}`);
-    } else {
-      setMessage("Mirrored to Discord.");
-    }
     setMirroring(false);
+
+    if (!res.ok) {
+      setMessage(`Error: ${res.error}`);
+      toast.error(res.error);
+      return;
+    }
+    setMessage("Mirrored to Discord.");
+    toast.success("Mirrored to Discord.");
     onChange();
   }
 

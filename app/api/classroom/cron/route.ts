@@ -1,8 +1,12 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { postToClassroom } from "@/lib/appscript";
+import { denyCron } from "@/lib/cron-auth";
 
-export async function POST() {
+export async function POST(request: NextRequest) {
+  const denied = denyCron(request);
+  if (denied) return denied;
+
   const now = new Date();
   const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000";
 

@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import { fmtDateCompact } from "@/lib/format";
+import { api } from "@/lib/client-api";
+import { useToast } from "@/components/Toast";
 
 interface Exec {
   id: string;
@@ -28,26 +30,44 @@ const PRIORITY_DOT: Record<string, string> = {
   low: "bg-gray-300",
 };
 
-export function MyTasksView({ executives }: { executives: Exec[] }) {
-  const [execId, setExecId] = useState<string | null>(null);
+export function MyTasksView({
+  executives,
+  selfId,
+}: {
+  executives: Exec[];
+  /** The signed-in account's roster id, when they have one. */
+  selfId: string | null;
+}) {
+  const toast = useToast();
+  const [execId, setExecId] = useState<string | null>(selfId);
   const [tasks, setTasks] = useState<TaskWithMeeting[]>([]);
   const [loading, setLoading] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  const [switching, setSwitching] = useState(false);
 
+  // Signed-in accounts are already scoped to themselves; only fall back to the
+  // remembered pick for shared team-password sessions.
   useEffect(() => {
+    if (selfId) return;
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved && executives.some((e) => e.id === saved)) {
       setExecId(saved);
     }
-  }, [executives]);
+  }, [executives, selfId]);
 
-  const load = useCallback(async (id: string) => {
-    setLoading(true);
-    const res = await fetch(`/api/tasks?executiveId=${id}`);
-    const data = await res.json();
-    setTasks(Array.isArray(data) ? data : []);
-    setLoading(false);
-  }, []);
+  const load = useCallback(
+    async (id: string) => {
+      setLoading(true);
+      const res = await api<TaskWithMeeting[]>(`/api/tasks?executiveId=${id}`);
+      setLoading(false);
+      if (!res.ok) {
+        toast.error(res.error);
+        return;
+      }
+      setTasks(Array.isArray(res.data) ? res.data : []);
+    },
+    [toast],
+  );
 
   useEffect(() => {
     if (execId) load(execId);
@@ -60,6 +80,7 @@ export function MyTasksView({ executives }: { executives: Exec[] }) {
       return;
     }
     setExecId(value);
+    setSwitching(false);
     localStorage.setItem(STORAGE_KEY, value);
   }
 
@@ -68,12 +89,20 @@ export function MyTasksView({ executives }: { executives: Exec[] }) {
     setTasks((cur) =>
       cur.map((t) => (t.id === task.id ? { ...t, completed: !t.completed } : t)),
     );
-    await fetch(`/api/tasks/${task.id}`, {
+    const res = await api(`/api/tasks/${task.id}`, {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ completed: !task.completed }),
+      body: { completed: !task.completed },
     });
     setBusy(null);
+
+    if (!res.ok) {
+      // Put the checkbox back where it was — the write didn't land.
+      setTasks((cur) =>
+        cur.map((t) => (t.id === task.id ? { ...t, completed: task.completed } : t)),
+      );
+      toast.error(res.error);
+      return;
+    }
     if (execId) load(execId);
   }
 
@@ -85,20 +114,37 @@ export function MyTasksView({ executives }: { executives: Exec[] }) {
 
   return (
     <div className="space-y-4">
-      {/* Exec picker */}
-      <select
-        value={execId ?? ""}
-        onChange={(e) => pick(e.target.value)}
-        className="input text-base py-3"
-      >
-        <option value="">— Select your name —</option>
-        {executives.map((e) => (
-          <option key={e.id} value={e.id}>
-            {e.name}
-            {e.role ? ` (${e.role})` : ""}
-          </option>
-        ))}
-      </select>
+      {/* Exec picker — collapsed to a one-line switcher once we know who you are */}
+      {selfId && !switching ? (
+        <div className="flex items-center justify-between gap-3 text-sm">
+          <span className="text-gray-500">
+            Showing tasks for{" "}
+            <span className="font-medium text-gray-900">
+              {executives.find((e) => e.id === execId)?.name ?? "you"}
+            </span>
+          </span>
+          <button
+            onClick={() => setSwitching(true)}
+            className="text-xs text-gray-400 hover:text-primary-600"
+          >
+            View someone else
+          </button>
+        </div>
+      ) : (
+        <select
+          value={execId ?? ""}
+          onChange={(e) => pick(e.target.value)}
+          className="input text-base py-3"
+        >
+          <option value="">— Select your name —</option>
+          {executives.map((e) => (
+            <option key={e.id} value={e.id}>
+              {e.name}
+              {e.role ? ` (${e.role})` : ""}
+            </option>
+          ))}
+        </select>
+      )}
 
       {execId === null ? (
         <p className="text-sm text-gray-400 text-center py-10">

@@ -30,10 +30,9 @@ Copy `.env.example` to `.env.local` and fill in:
 | `APPWRITE_DATABASE_ID` | Optional | Appwrite database ID (default: mun_dashboard) |
 | `APPWRITE_BUCKET_TOPIC_GUIDES` | Optional | Topic guide bucket ID (default: topic_guides) |
 | `APPWRITE_BUCKET_INSTAGRAM_POSTS` | Optional | Instagram bucket ID (default: instagram_posts) |
-| `SESSION_PASSWORD` | Yes | Password for the dashboard login |
-| `SECGEN_PASSWORD` | Optional | Separate password that unlocks the Sec-Gen panel (`/executives`). If unset, that panel cannot be unlocked. |
-| `NEXT_PUBLIC_BASE_URL` | For Classroom + Instagram | Public URL of the app (`http://localhost:3000` locally) |
-| `APPS_SCRIPT_URL` | For Classroom + Minutes | Your deployed Apps Script web app URL |
+| `SESSION_PASSWORD` | Yes | Signs the session cookie, and doubles as the shared team password. Sec-Gen access is granted per account, not by a password — see [Accounts & access](#accounts--access). |
+| `NEXT_PUBLIC_BASE_URL` | Yes | Public URL of the app (`http://localhost:3000` locally). Account invite links are built from this, so a wrong value sends people to the wrong host. |
+| `APPS_SCRIPT_URL` | For Classroom, invites, Docs | Your deployed Apps Script web app URL. Also sends account invite emails and generates topic-guide Docs. |
 | `CLASSROOM_COURSE_ID` | For Classroom | The Google Classroom course ID |
 | `INSTAGRAM_ACCESS_TOKEN` | For auto-post | Meta Graph API long-lived token |
 | `INSTAGRAM_USER_ID` | For auto-post | Your Instagram Business account user ID |
@@ -51,7 +50,7 @@ This uses Google Apps Script so the announcement posts using your school account
 3. Delete the default code and paste the contents of `appscript/ClassroomPoster.gs`
 4. In the left sidebar, click **Services** (+) and add:
    - **Google Classroom API** (required for posting announcements)
-   - **Drive API** (required for attaching topic guides — skip if you don't need attachments)
+   - **Drive API** (required for attaching topic guides, minutes Docs, and generated topic-guide Docs)
 5. Click **Deploy** > **New Deployment**
    - Type: **Web App**
    - Execute as: **Me** (your school account)
@@ -67,7 +66,7 @@ When a meeting is created, the dashboard calls Apps Script to generate a templat
 
 To configure:
 
-1. In the dashboard, open the **Sec-Gen Panel** (sidebar → 👥 Sec-Gen Panel), unlock with `SECGEN_PASSWORD`
+1. In the dashboard, open the **Sec-Gen Panel** (sidebar → 🔑 Sec-Gen Panel) using an account that has Sec-Gen access
 2. In the **Meeting Minutes Doc** card:
    - Toggle **Use a Shared Drive** on
    - Paste your **Shared Drive ID** (the part of the URL after `drive.google.com/drive/folders/`)
@@ -92,6 +91,62 @@ When the dashboard runs on **localhost**, Apps Script can't reach `http://localh
 If a meeting has a **Responsible person email** set in its detail page, and no announcement has been scheduled by ~18 hours before the meeting (i.e. the night before), the dashboard sends that person an email reminder via Apps Script (using `MailApp.sendEmail` from the school account). Each meeting only gets one reminder.
 
 This uses the same Apps Script deployment — no extra setup beyond the Classroom poster.
+
+### Topic Guide Docs (Apps Script)
+
+Each Topic Bank entry can link to a Google Docs topic guide, either by pasting a link or by clicking **📄 Create guide doc**. Generated Docs use the same navy theme as the minutes and come pre-sectioned: The Question, Background, Current Situation, Key Questions for Debate, Bloc Positions, Points to Research, Sources, Glossary.
+
+Generated guides land in the first of these that's set:
+
+1. The topic-guide folder (`topicGuideFolderId` setting, or the `TOPIC_GUIDE_FOLDER_ID` script property)
+2. The minutes shared drive, if **Use a Shared Drive** is on
+3. The Apps Script owner's My Drive
+
+Unlike minutes Docs, topic guides are **never re-synced** — once created the Doc belongs entirely to whoever is researching it. "Unlink" only removes the dashboard's reference; it never deletes the Doc.
+
+If `APPS_SCRIPT_URL` isn't set, the Create button is hidden and you can still paste links by hand.
+
+---
+
+## Accounts & access
+
+Everyone on the roster can be given their own login, and **Sec-Gen access is a permanent property of that account** — there's no PIN or shared password to unlock it.
+
+### Access levels
+
+| Level | Can do |
+|---|---|
+| **Member** | Meetings, tasks, topics, Instagram, stats |
+| **Sec-Gen** | Everything above, plus the roster, accounts, and integration settings |
+| **Owner** | Everything above, plus granting/revoking Sec-Gen and owner on other accounts |
+
+### First-time setup
+
+The dashboard starts *unclaimed*: no accounts exist, so nobody could create the first one. To bridge that:
+
+1. Sign in with the shared `SESSION_PASSWORD`. While no Sec-Gen account exists this grants **owner** rights.
+2. Open **🔑 Sec-Gen Panel → Accounts & access** and create your own account, choosing **Sec-Gen** or **Owner**.
+3. Follow the emailed link to set your password, then sign in with it.
+4. Optional but recommended: switch **Shared team password** off, so personal accounts are required.
+
+Once at least one Sec-Gen account exists, the shared password automatically drops to **member-level** — it can never grant Sec-Gen again.
+
+### Adding people
+
+1. Add them to the roster in the Sec-Gen Panel (name, role, email).
+2. Under **No login yet**, click **Create account**, pick a username and access level.
+3. They get an email with a one-time link (valid 7 days) to choose their own password.
+
+If the email can't send — no `APPS_SCRIPT_URL`, or no email on file — the link is shown in a toast with a **Copy link** button so you can share it over Slack instead.
+
+### Changing or removing access
+
+- **Grant/revoke Sec-Gen** — change the access dropdown on their row. It applies immediately, even to someone already signed in, because privileged actions re-check the database rather than trusting the session cookie.
+- **Reset a password** — click **Reset password** to email a fresh setup link. Their current password keeps working until the new link is used.
+- **Disable** — blocks sign-in but keeps the account.
+- **Remove** — deletes the login only. The person stays on the roster with all their task history intact.
+
+The dashboard refuses any change that would leave nobody holding Sec-Gen access, so the team can't lock itself out.
 
 ---
 

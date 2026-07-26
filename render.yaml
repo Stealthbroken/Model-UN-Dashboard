@@ -28,9 +28,10 @@ services:
         sync: false
       - key: SESSION_PASSWORD
         sync: false
-      - key: SECGEN_PASSWORD
-        sync: false
       - key: NEXT_PUBLIC_BASE_URL
+        sync: false
+      # Authorizes the internal cron POSTs; any random string.
+      - key: CRON_SECRET
         sync: false
       - key: APPS_SCRIPT_URL
         sync: false

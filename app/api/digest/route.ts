@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { sendReminderEmail } from "@/lib/appscript";
-import { getSession } from "@/lib/session";
+import { requireSecgen, isDenied } from "@/lib/auth";
 import { fmtDate } from "@/lib/format";
 
 /**
@@ -9,10 +9,8 @@ import { fmtDate } from "@/lib/format";
  * Manually triggered from the Sec-Gen panel (sec-gen access required).
  */
 export async function POST() {
-  const session = await getSession();
-  if (!session.isSecgen) {
-    return NextResponse.json({ error: "Sec-Gen access required" }, { status: 403 });
-  }
+  const gate = await requireSecgen();
+  if (isDenied(gate)) return gate.error;
 
   const now = new Date();
 

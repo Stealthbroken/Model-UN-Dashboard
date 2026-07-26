@@ -1,7 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
+import { requireUser, isDenied } from "@/lib/auth";
 
 export async function POST(request: NextRequest) {
+  const gate = await requireUser();
+  if (isDenied(gate)) return gate.error;
+
   const { meetingId, body, scheduledFor, status } = await request.json();
 
   if (!meetingId || !body) {
@@ -40,6 +44,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const gate = await requireUser();
+  if (isDenied(gate)) return gate.error;
+
   const { id } = await request.json();
   await prisma.classroomAnnouncement.delete({ where: { id } });
   return NextResponse.json({ ok: true });

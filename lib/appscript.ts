@@ -124,6 +124,54 @@ export async function createMinutesDoc(
   }
 }
 
+export interface TopicGuideDocData {
+  title: string;
+  description?: string | null;
+  category?: string | null;
+  difficulty?: string | null;
+  notes?: string | null;
+  /** Drive folder to create the Doc in. Falls back to the script's My Drive. */
+  folderId?: string | null;
+}
+
+/**
+ * Creates a pre-formatted topic guide Doc for a Topic Bank entry. Unlike the
+ * minutes Docs there's no re-sync — once created the Doc belongs entirely to
+ * whoever is researching the topic.
+ */
+export async function createTopicGuideDoc(
+  data: TopicGuideDocData,
+): Promise<{ ok: boolean; error?: string; docId?: string; docUrl?: string }> {
+  const url = process.env.APPS_SCRIPT_URL;
+  if (!url) return { ok: false, error: "Apps Script URL not configured" };
+
+  try {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        action: "createTopicGuideDoc",
+        title: data.title,
+        description: data.description || null,
+        category: data.category || null,
+        difficulty: data.difficulty || null,
+        notes: data.notes || null,
+        folderId: data.folderId || null,
+      }),
+    });
+
+    if (!res.ok) {
+      const text = await res.text();
+      return { ok: false, error: `Apps Script returned ${res.status}: ${text}` };
+    }
+
+    const json = await res.json();
+    return { ok: !!json.ok, error: json.error, docId: json.docId, docUrl: json.docUrl };
+  } catch (err: unknown) {
+    return { ok: false, error: err instanceof Error ? err.message : "Unknown error" };
+  }
+}
+
 /**
  * Re-syncs the managed region of an existing minutes Doc (header, attendance,
  * agenda, weekly tasks) — the human-written Discussion Notes are left intact.

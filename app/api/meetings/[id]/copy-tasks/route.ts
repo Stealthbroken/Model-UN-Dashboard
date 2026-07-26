@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma, type Task } from "@/lib/db";
 import { syncMinutesDoc } from "@/lib/minutes-sync";
+import { requireUser, isDenied } from "@/lib/auth";
 
 export async function POST(
   _request: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const gate = await requireUser();
+  if (isDenied(gate)) return gate.error;
+
   const id = params.id;
   if (!id) return NextResponse.json({ error: "Bad id" }, { status: 400 });
 

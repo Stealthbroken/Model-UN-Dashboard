@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { api } from "@/lib/client-api";
+import { useToast } from "@/components/Toast";
 
 export function DigestPanel() {
+  const toast = useToast();
   const [sending, setSending] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const [isError, setIsError] = useState(false);
@@ -17,24 +20,32 @@ export function DigestPanel() {
     setSending(true);
     setMessage(null);
     setIsError(false);
-    try {
-      const res = await fetch("/api/digest", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) {
-        setIsError(true);
-        setMessage(data.error || "Failed to send digest.");
-      } else if (data.sent === 0) {
-        setMessage(data.message || "No digests were sent.");
-      } else {
-        const failNote = data.failed ? ` (${data.failed} failed)` : "";
-        setMessage(`Digest sent to ${data.sent} executive${data.sent === 1 ? "" : "s"}.${failNote}`);
-        setIsError(!!data.failed);
-      }
-    } catch {
-      setIsError(true);
-      setMessage("Network error sending digest.");
-    }
+    const res = await api<{ sent: number; failed?: number; message?: string }>("/api/digest", {
+      method: "POST",
+    });
     setSending(false);
+
+    if (!res.ok) {
+      setIsError(true);
+      setMessage(res.error);
+      toast.error(res.error);
+      return;
+    }
+    if (res.data.sent === 0) {
+      const note = res.data.message || "No digests were sent.";
+      setMessage(note);
+      toast.info(note);
+      return;
+    }
+    const failNote = res.data.failed ? ` (${res.data.failed} failed)` : "";
+    const summary = `Digest sent to ${res.data.sent} executive${
+      res.data.sent === 1 ? "" : "s"
+    }.${failNote}`;
+    setMessage(summary);
+    setIsError(!!res.data.failed);
+    // Partial failures are still worth an error toast — some execs got nothing.
+    if (res.data.failed) toast.error(summary);
+    else toast.success(summary);
   }
 
   return (

@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/client-api";
+import { useToast } from "@/components/Toast";
 
 interface Executive {
   id: string;
@@ -14,6 +16,7 @@ interface Executive {
 
 export function ExecutivesManager({ initial }: { initial: Executive[] }) {
   const router = useRouter();
+  const toast = useToast();
   const [execs, setExecs] = useState<Executive[]>(initial);
   const [form, setForm] = useState({ name: "", role: "", email: "" });
   const [saving, setSaving] = useState(false);
@@ -21,27 +24,31 @@ export function ExecutivesManager({ initial }: { initial: Executive[] }) {
   async function add() {
     if (!form.name.trim()) return;
     setSaving(true);
-    const res = await fetch("/api/executives", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    if (res.ok) {
-      const created = await res.json();
-      setExecs([...execs, created]);
-      setForm({ name: "", role: "", email: "" });
-    }
+    const res = await api<Executive>("/api/executives", { method: "POST", body: form });
     setSaving(false);
+
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
+    setExecs([...execs, res.data]);
+    setForm({ name: "", role: "", email: "" });
+    toast.success("Executive added.");
     router.refresh();
   }
 
   async function update(id: string, patch: Partial<Executive>) {
+    const previous = execs.find((e) => e.id === id);
     setExecs((cur) => cur.map((e) => (e.id === id ? { ...e, ...patch } : e)));
-    await fetch(`/api/executives/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
-    });
+    const res = await api(`/api/executives/${id}`, { method: "PATCH", body: patch });
+
+    if (!res.ok) {
+      // The row already moved optimistically — put it back the way the server has it.
+      if (previous) setExecs((cur) => cur.map((e) => (e.id === id ? previous : e)));
+      toast.error(res.error);
+      return;
+    }
+    toast.success("Executive updated.");
     router.refresh();
   }
 
@@ -52,8 +59,14 @@ export function ExecutivesManager({ initial }: { initial: Executive[] }) {
       )
     )
       return;
-    await fetch(`/api/executives/${id}`, { method: "DELETE" });
+    const res = await api(`/api/executives/${id}`, { method: "DELETE" });
+
+    if (!res.ok) {
+      toast.error(res.error);
+      return;
+    }
     setExecs((cur) => cur.filter((e) => e.id !== id));
+    toast.success("Executive deleted.");
     router.refresh();
   }
 

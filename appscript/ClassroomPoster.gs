@@ -8,6 +8,9 @@
  *  4. action: "updateMinutesDoc"  — Re-sync the managed region of a minutes Doc
  *                                   (header, attendance, agenda, tasks) while
  *                                   leaving the human-written notes untouched.
+ *  5. action: "createTopicGuideDoc" — Create a pre-formatted topic guide Doc
+ *                                   for a Topic Bank entry (background, key
+ *                                   questions, bloc positions, sources).
  *
  * SETUP:
  * 1. Create a new project at https://script.google.com (school account).
@@ -26,6 +29,7 @@ function doPost(e) {
     if (action === "email") return handleEmail(data);
     if (action === "createMinutesDoc") return handleCreateMinutesDoc(data);
     if (action === "updateMinutesDoc") return handleUpdateMinutesDoc(data);
+    if (action === "createTopicGuideDoc") return handleCreateTopicGuideDoc(data);
     return handleAnnouncement(data);
 
   } catch (err) {
@@ -414,7 +418,138 @@ function styleTable(table) {
   }
 }
 
+/* ═════════════════ Topic Guide Doc ═════════════════ */
+
+/**
+ * Builds a research-ready topic guide skeleton for a Topic Bank entry. Every
+ * section is a prompt for the delegate writing it — the dashboard never
+ * re-syncs this Doc, so the whole thing belongs to whoever edits it.
+ *
+ * Expects: { title, description, category, difficulty, notes, folderId }
+ */
+function handleCreateTopicGuideDoc(data) {
+  if (!data.title) {
+    return jsonResponse({ ok: false, error: "Missing title" });
+  }
+
+  var folderId = (data.folderId || "").trim();
+  if (!folderId) {
+    folderId = (
+      PropertiesService.getScriptProperties().getProperty("TOPIC_GUIDE_FOLDER_ID") || ""
+    ).trim();
+  }
+
+  var docName = "Topic Guide — " + data.title;
+
+  var doc;
+  if (folderId) {
+    try {
+      var driveFile = Drive.Files.create(
+        { name: docName, mimeType: "application/vnd.google-apps.document", parents: [folderId] },
+        null,
+        { supportsAllDrives: true }
+      );
+      doc = DocumentApp.openById(driveFile.id);
+    } catch (driveErr) {
+      doc = DocumentApp.create(docName);
+    }
+  } else {
+    doc = DocumentApp.create(docName);
+  }
+
+  var body = doc.getBody();
+  body.clear();
+  applyMinutesTheme(body);   // same navy/gray palette as the minutes Docs
+
+  var idx = 0;
+  var tz = Session.getScriptTimeZone();
+
+  // ── Header ──
+  body.insertParagraph(idx++, "Topic Guide")
+    .setHeading(DocumentApp.ParagraphHeading.TITLE);
+  body.insertParagraph(idx++, data.title)
+    .setHeading(DocumentApp.ParagraphHeading.SUBTITLE);
+
+  var meta = [];
+  if (data.category) meta.push(data.category);
+  if (data.difficulty) meta.push(titleCase(data.difficulty) + " level");
+  meta.push("Created " + Utilities.formatDate(new Date(), tz, "dd/MM/yyyy"));
+  mutedLine(body, idx++, meta.join("      "), 10, false);
+
+  body.insertHorizontalRule(idx++);
+
+  // ── Framing carried over from the Topic Bank ──
+  if (data.description && String(data.description).trim()) {
+    body.insertParagraph(idx++, "The Question")
+      .setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    body.insertParagraph(idx++, String(data.description).trim());
+  }
+
+  if (data.notes && String(data.notes).trim()) {
+    body.insertParagraph(idx++, "Chair Notes")
+      .setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    mutedLine(body, idx++, String(data.notes).trim(), 10, true);
+  }
+
+  // ── Sections to fill in ──
+  var sections = [
+    ["Background", [
+      "How did this issue arise? Give delegates the 5-minute version.",
+      "Key dates and turning points.",
+      "Which bodies or treaties already govern it?"
+    ]],
+    ["Current Situation", [
+      "What is the state of play right now?",
+      "What has been tried, and why hasn't it settled the matter?"
+    ]],
+    ["Key Questions for Debate", [
+      "",
+      "",
+      ""
+    ]],
+    ["Bloc Positions", [
+      "Bloc / country — position, motivation, red lines.",
+      "",
+      ""
+    ]],
+    ["Points to Research", [
+      "Statistics or precedents worth having on hand.",
+      "Likely counter-arguments to prepare for."
+    ]],
+    ["Sources", [
+      "Link — one line on why it's useful.",
+      ""
+    ]],
+    ["Glossary", [
+      "Term — plain-English definition."
+    ]]
+  ];
+
+  for (var s = 0; s < sections.length; s++) {
+    body.insertParagraph(idx++, sections[s][0])
+      .setHeading(DocumentApp.ParagraphHeading.HEADING1);
+    var bullets = sections[s][1];
+    for (var b = 0; b < bullets.length; b++) {
+      var li = body.insertListItem(idx++, bullets[b]);
+      li.setGlyphType(DocumentApp.GlyphType.BULLET);
+      // Prompts are gray hints; blank bullets are left as normal body text
+      // so typing over them doesn't inherit the muted styling.
+      if (bullets[b]) {
+        li.editAsText().setForegroundColor(MIN_MUTED).setFontSize(10).setItalic(true);
+      }
+    }
+  }
+
+  doc.saveAndClose();
+  return jsonResponse({ ok: true, docId: doc.getId(), docUrl: doc.getUrl() });
+}
+
 /* ───────── Helpers ───────── */
+
+function titleCase(s) {
+  s = String(s || "");
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 function jsonResponse(obj) {
   return ContentService

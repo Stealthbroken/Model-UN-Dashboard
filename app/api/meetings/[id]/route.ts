@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { syncMinutesDoc } from "@/lib/minutes-sync";
+import { requireUser, isDenied } from "@/lib/auth";
 
 export async function PATCH(
   request: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const gate = await requireUser();
+  if (isDenied(gate)) return gate.error;
+
   const id = params.id;
   const data = await request.json();
 
@@ -48,6 +52,9 @@ export async function DELETE(
   _request: NextRequest,
   { params }: { params: { id: string } },
 ) {
+  const gate = await requireUser();
+  if (isDenied(gate)) return gate.error;
+
   const id = params.id;
   await prisma.meeting.delete({ where: { id } });
   return NextResponse.json({ ok: true });

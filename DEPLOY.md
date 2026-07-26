@@ -87,7 +87,6 @@ git push
    - APPWRITE_BUCKET_TOPIC_GUIDES
    - APPWRITE_BUCKET_INSTAGRAM_POSTS
    - SESSION_PASSWORD
-   - SECGEN_PASSWORD
    - NEXT_PUBLIC_BASE_URL (leave blank for now, set in Step 5)
    - APPS_SCRIPT_URL
    - CLASSROOM_COURSE_ID
@@ -102,7 +101,9 @@ When it finishes, Render shows your live URL at the top of the page.
 
 ## Step 5 - Tell the app its own URL
 
-Some features (topic guide attachments, Instagram) need the public URL.
+Several features need the public URL: account invite links, topic guide
+attachments, and Instagram. Invite emails will point at the wrong host until
+this is set, so do not skip it.
 
 1. Render -> your service -> Environment.
 2. Set NEXT_PUBLIC_BASE_URL to your Render URL, for example:
@@ -125,7 +126,12 @@ keeps it awake:
 ## Step 7 - Final checks
 
 - Visit your Render URL and log in with SESSION_PASSWORD
-- Open the Sec-Gen Panel and unlock with SECGEN_PASSWORD
+- Open the Sec-Gen Panel (no unlock prompt - the shared password grants owner
+  rights until the first Sec-Gen account exists)
+- Under Accounts & access, create your own Sec-Gen account and follow the
+  emailed link to set a password, then sign in with it. See SETUP.md ->
+  Accounts & access for the full flow.
+- Once that works, consider switching the shared team password off
 - Create a test meeting; refresh and confirm it persists
 - Upload a topic guide PDF and confirm it previews/downloads
 - If you use Google Classroom: set APPS_SCRIPT_URL, CLASSROOM_COURSE_ID, and NEXT_PUBLIC_BASE_URL

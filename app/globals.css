@@ -10,6 +10,32 @@ body {
   .input {
     @apply w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent text-sm;
   }
+  /* Placeholder block shown while server data streams in. */
+  .skeleton {
+    @apply animate-pulse rounded bg-gray-200;
+  }
+}
+
+/* Toast entry — slides up from the bottom-right stack. */
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.animate-toast-in {
+  animation: toast-in 160ms ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-toast-in,
+  .animate-pulse {
+    animation: none;
+  }
 }
 
 /* ───────────────────────── Dark mode ─────────────────────────

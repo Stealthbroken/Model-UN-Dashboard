@@ -2,6 +2,8 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/client-api";
+import { useToast } from "@/components/Toast";
 
 const DAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
@@ -43,6 +45,7 @@ export function MeetingCreator() {
 
 function Modal({ onClose }: { onClose: () => void }) {
   const router = useRouter();
+  const toast = useToast();
   const [tab, setTab] = useState<"single" | "recurring">("single");
   const [meetingType, setMeetingType] = useState<"regular" | "exec">("regular");
   const [submitting, setSubmitting] = useState(false);
@@ -109,25 +112,26 @@ function Modal({ onClose }: { onClose: () => void }) {
             location: recLocation,
           };
 
-    const res = await fetch("/api/meetings", {
+    const res = await api<{ created?: number; skipped?: number }>("/api/meetings", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
+      body: payload,
     });
-    const data = await res.json();
     if (!res.ok) {
-      setMessage(`Error: ${data.error || "failed"}`);
+      // The modal stays open on failure, so keep the message in-place too.
+      setMessage(`Error: ${res.error}`);
+      toast.error(res.error);
       setSubmitting(false);
       return;
     }
-    if (tab === "recurring") {
-      setMessage(
-        `Created ${data.created} meeting${data.created === 1 ? "" : "s"}` +
-          (data.skipped ? `, skipped ${data.skipped} duplicate${data.skipped === 1 ? "" : "s"}` : ""),
-      );
-    } else {
-      setMessage("Meeting created.");
-    }
+    const summary =
+      tab === "recurring"
+        ? `Created ${res.data.created} meeting${res.data.created === 1 ? "" : "s"}` +
+          (res.data.skipped
+            ? `, skipped ${res.data.skipped} duplicate${res.data.skipped === 1 ? "" : "s"}`
+            : "")
+        : "Meeting created.";
+    setMessage(summary);
+    toast.success(summary);
     setSubmitting(false);
     router.refresh();
     setTimeout(onClose, 600);

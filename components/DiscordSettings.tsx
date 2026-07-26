@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { api } from "@/lib/client-api";
+import { useToast } from "@/components/Toast";
 
 export function DiscordSettings({ initialUrl }: { initialUrl: string }) {
+  const toast = useToast();
   const [draft, setDraft] = useState(initialUrl);
   const [saved, setSaved] = useState(initialUrl);
   const [saving, setSaving] = useState(false);
@@ -15,21 +18,23 @@ export function DiscordSettings({ initialUrl }: { initialUrl: string }) {
     setSaving(true);
     setMessage(null);
     setIsError(false);
-    const res = await fetch("/api/settings/discord", {
+    const res = await api<{ webhookUrl: string }>("/api/settings/discord", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ webhookUrl: draft }),
+      body: { webhookUrl: draft },
     });
-    const data = await res.json();
+    setSaving(false);
+
     if (!res.ok) {
       setIsError(true);
-      setMessage(data.error || "Failed to save.");
-    } else {
-      setSaved(data.webhookUrl);
-      setDraft(data.webhookUrl);
-      setMessage(data.webhookUrl ? "Webhook saved." : "Webhook cleared.");
+      setMessage(res.error);
+      toast.error(res.error);
+      return;
     }
-    setSaving(false);
+    setSaved(res.data.webhookUrl);
+    setDraft(res.data.webhookUrl);
+    const done = res.data.webhookUrl ? "Webhook saved." : "Webhook cleared.";
+    setMessage(done);
+    toast.success(done);
   }
 
   return (

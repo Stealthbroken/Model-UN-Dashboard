@@ -4,6 +4,8 @@ export const SETTING_KEYS = {
   useSharedDrive: "useSharedDrive",
   sharedDriveId: "sharedDriveId",
   discordWebhookUrl: "discordWebhookUrl",
+  allowTeamPassword: "allowTeamPassword",
+  topicGuideFolderId: "topicGuideFolderId",
 } as const;
 
 export interface MinutesDocSettings {
@@ -56,6 +58,49 @@ export async function setDiscordWebhookUrl(url: string): Promise<string> {
   await prisma.setting.upsert({
     where: { key: SETTING_KEYS.discordWebhookUrl },
     create: { key: SETTING_KEYS.discordWebhookUrl, value },
+    update: { value },
+  });
+  return value;
+}
+
+/* ───────── Access control ─────────
+   Whether the shared SESSION_PASSWORD still works as a way in. Turning it off
+   makes personal accounts mandatory. Defaults to on so nothing breaks on
+   upgrade; lib/auth.ts ignores this while the install has no Sec-Gen account. */
+
+export async function getAllowTeamPassword(): Promise<boolean> {
+  const row = await prisma.setting.findUnique({
+    where: { key: SETTING_KEYS.allowTeamPassword },
+  });
+  return row?.value !== "false";
+}
+
+export async function setAllowTeamPassword(allow: boolean): Promise<boolean> {
+  const value = String(allow);
+  await prisma.setting.upsert({
+    where: { key: SETTING_KEYS.allowTeamPassword },
+    create: { key: SETTING_KEYS.allowTeamPassword, value },
+    update: { value },
+  });
+  return allow;
+}
+
+/* ───────── Topic guide Docs ─────────
+   Drive folder that generated topic-guide Docs land in. Falls back to the
+   minutes shared drive, then to the Apps Script owner's My Drive. */
+
+export async function getTopicGuideFolderId(): Promise<string> {
+  const row = await prisma.setting.findUnique({
+    where: { key: SETTING_KEYS.topicGuideFolderId },
+  });
+  return row?.value || "";
+}
+
+export async function setTopicGuideFolderId(id: string): Promise<string> {
+  const value = id.trim();
+  await prisma.setting.upsert({
+    where: { key: SETTING_KEYS.topicGuideFolderId },
+    create: { key: SETTING_KEYS.topicGuideFolderId, value },
     update: { value },
   });
   return value;

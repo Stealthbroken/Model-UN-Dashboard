@@ -1,14 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
-import { getSession } from "@/lib/session";
-
-async function requireSecgen() {
-  const session = await getSession();
-  if (!session.isSecgen) {
-    return NextResponse.json({ error: "Sec-Gen access required" }, { status: 403 });
-  }
-  return null;
-}
+import { requireSecgen, isDenied } from "@/lib/auth";
 
 export async function GET() {
   // GET stays open so the meeting page can show exec names + assign tasks.
@@ -20,8 +12,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
-  const denied = await requireSecgen();
-  if (denied) return denied;
+  const gate = await requireSecgen();
+  if (isDenied(gate)) return gate.error;
   const data = await request.json();
   if (!data.name || typeof data.name !== "string") {
     return NextResponse.json({ error: "Name is required" }, { status: 400 });

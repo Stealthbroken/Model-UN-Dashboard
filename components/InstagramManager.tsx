@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { api } from "@/lib/client-api";
+import { useToast } from "@/components/Toast";
 import { fmtDate, fmtDateTime } from "@/lib/format";
 
 interface InstagramPost {
@@ -20,6 +22,7 @@ interface Props {
 
 export function InstagramManager({ posts, apiConfigured }: Props) {
   const router = useRouter();
+  const toast = useToast();
   const [editingId, setEditingId] = useState<string | null>(null);
 
   const drafts = posts.filter((p) => p.status !== "posted");
@@ -75,11 +78,15 @@ export function InstagramManager({ posts, apiConfigured }: Props) {
                 onEdit={() => setEditingId(p.id)}
                 onDelete={async () => {
                   if (!confirm("Delete this draft?")) return;
-                  await fetch("/api/instagram", {
+                  const res = await api("/api/instagram", {
                     method: "DELETE",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ id: p.id }),
+                    body: { id: p.id },
                   });
+                  if (!res.ok) {
+                    toast.error(res.error);
+                    return;
+                  }
+                  toast.success("Draft deleted.");
                   router.refresh();
                 }}
               />
@@ -112,6 +119,7 @@ function PostComposer({
   onSaved: () => void;
   onCancel?: () => void;
 }) {
+  const toast = useToast();
   const [caption, setCaption] = useState(post?.caption || "");
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string | null>(post?.imagePath || null);
@@ -136,20 +144,28 @@ function PostComposer({
     fd.append("autoPost", autoPost.toString());
     if (imageFile) fd.append("image", imageFile);
 
+    // Multipart upload, so this one can't go through `api` — it JSON-encodes bodies.
     const res = await fetch("/api/instagram", { method: "POST", body: fd });
-    const data = await res.json();
-    if (data.error) setMessage(`Error: ${data.error}`);
-    else if (data.status === "posted") setMessage("Posted to Instagram!");
-    else setMessage(post ? "Updated." : "Draft saved.");
+    const data = await res.json().catch(() => null);
     setSaving(false);
-    if (!data.error) {
-      if (!post) {
-        setCaption("");
-        setImageFile(null);
-        setImagePreview(null);
-      }
-      onSaved();
+
+    // A failed auto-post still saves the row, so it comes back 200 with an `error`.
+    const error = !res.ok || data?.error ? data?.error || "Couldn't save the post." : null;
+    if (error) {
+      setMessage(`Error: ${error}`);
+      toast.error(error);
+      return;
     }
+    const done =
+      data?.status === "posted" ? "Posted to Instagram!" : post ? "Updated." : "Draft saved.";
+    setMessage(done);
+    toast.success(done);
+    if (!post) {
+      setCaption("");
+      setImageFile(null);
+      setImagePreview(null);
+    }
+    onSaved();
   }
 
   return (

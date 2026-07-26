@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/db";
 import { storage, ID, BUCKETS } from "@/lib/appwrite";
+import { requireUser, isDenied } from "@/lib/auth";
 import { InputFile } from "node-appwrite/file";
 
 // Topic guides live in Appwrite Storage; the DB row keeps a file id plus the
@@ -8,6 +9,9 @@ import { InputFile } from "node-appwrite/file";
 const MAX_BYTES = 8 * 1024 * 1024; // 8 MB
 
 export async function POST(request: NextRequest) {
+  const gate = await requireUser();
+  if (isDenied(gate)) return gate.error;
+
   const formData = await request.formData();
   const file = formData.get("file") as File | null;
   const meetingId = formData.get("meetingId") as string | null;
@@ -48,6 +52,9 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const gate = await requireUser();
+  if (isDenied(gate)) return gate.error;
+
   const { id } = await request.json();
   const existing = await prisma.topicGuide.findUnique({ where: { id } });
   if (existing?.bucketFileId) {

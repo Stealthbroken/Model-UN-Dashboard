@@ -3,6 +3,7 @@ import { prisma } from "@/lib/db";
 import { createMinutesDoc } from "@/lib/appscript";
 import { getMinutesDocSettings } from "@/lib/settings";
 import { buildMinutesPayload } from "@/lib/minutes-sync";
+import { requireUser, isDenied } from "@/lib/auth";
 
 async function tryCreateMinutesDoc(meetingId: string): Promise<void> {
   // Best-effort: never block meeting creation if Apps Script is down/unconfigured
@@ -39,6 +40,9 @@ async function tryCreateMinutesDoc(meetingId: string): Promise<void> {
 }
 
 export async function GET() {
+  const gate = await requireUser();
+  if (isDenied(gate)) return gate.error;
+
   const meetings = await prisma.meeting.findMany({
     orderBy: { date: "asc" },
   });
@@ -53,6 +57,9 @@ export async function GET() {
  * Both return the created meetings as an array.
  */
 export async function POST(request: NextRequest) {
+  const gate = await requireUser();
+  if (isDenied(gate)) return gate.error;
+
   const data = await request.json();
 
   if (data.mode === "recurring") {
@@ -170,6 +177,9 @@ async function createRecurring(data: {
 }
 
 export async function DELETE(request: NextRequest) {
+  const gate = await requireUser();
+  if (isDenied(gate)) return gate.error;
+
   const { id } = await request.json();
   await prisma.meeting.delete({ where: { id } });
   return NextResponse.json({ ok: true });

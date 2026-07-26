@@ -17,9 +17,19 @@ app.prepare().then(() => {
     console.log(`> MUN Dashboard ready on port ${port}`);
   });
 
+  // The cron routes reject unauthorized callers (see lib/cron-auth.ts). When
+  // CRON_SECRET is set we present it; otherwise the routes fall back to
+  // accepting loopback requests, which is what these are.
+  const cronHeaders = process.env.CRON_SECRET
+    ? { Authorization: `Bearer ${process.env.CRON_SECRET}` }
+    : undefined;
+
   async function runCron(path, label) {
     try {
-      const res = await fetch(`http://localhost:${port}${path}`, { method: "POST" });
+      const res = await fetch(`http://localhost:${port}${path}`, {
+        method: "POST",
+        headers: cronHeaders,
+      });
       if (!res.ok) console.error(`Cron: ${label} failed`, res.status);
     } catch {
       // Server may not be ready yet

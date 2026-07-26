@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { api } from "@/lib/client-api";
+import { useToast } from "@/components/Toast";
 
 interface Settings {
   useSharedDrive: boolean;
@@ -8,6 +10,7 @@ interface Settings {
 }
 
 export function MinutesDocSettings({ initial }: { initial: Settings }) {
+  const toast = useToast();
   const [settings, setSettings] = useState<Settings>(initial);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
@@ -15,22 +18,24 @@ export function MinutesDocSettings({ initial }: { initial: Settings }) {
   async function save(patch: Partial<Settings>) {
     setSaving(true);
     setMessage(null);
-    const next = { ...settings, ...patch };
-    setSettings(next);
-    const res = await fetch("/api/settings/minutes-doc", {
+    const previous = settings;
+    setSettings({ ...settings, ...patch });
+    const res = await api<Settings>("/api/settings/minutes-doc", {
       method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(patch),
+      body: patch,
     });
-    if (!res.ok) {
-      setMessage("Failed to save. Check sec-gen access.");
-    } else {
-      const data = await res.json();
-      setSettings(data);
-      setMessage("Saved.");
-      setTimeout(() => setMessage(null), 1500);
-    }
     setSaving(false);
+
+    if (!res.ok) {
+      // The toggle/ID already moved optimistically — put it back.
+      setSettings(previous);
+      toast.error(res.error);
+      return;
+    }
+    setSettings(res.data);
+    toast.success("Minutes doc settings saved.");
+    setMessage("Saved.");
+    setTimeout(() => setMessage(null), 1500);
   }
 
   const needsDriveId = settings.useSharedDrive && !settings.sharedDriveId.trim();
