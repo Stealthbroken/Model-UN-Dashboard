@@ -8,6 +8,7 @@ import { ROLE_LABEL } from "@/lib/session";
 export const metadata: Metadata = {
   title: "MUN Dashboard",
   description: "Model United Nations Club Executive Dashboard",
+  icons: { icon: "/favicon.ico" },
 };
 
 export const viewport: Viewport = {
