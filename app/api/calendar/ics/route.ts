@@ -35,6 +35,10 @@ export async function GET(request: NextRequest) {
       "BEGIN:VEVENT",
       `UID:mun-meeting-${m.id}@mun-dashboard`,
       `DTSTAMP:${now}`,
+      // Signals the event changed so subscribed clients refresh it instead of
+      // keeping a stale copy. We regenerate the whole feed on every fetch, so
+      // even clients that ignore this pick up edits on their next poll.
+      `LAST-MODIFIED:${toIcsUtc(new Date(m.createdAt))}`,
       `DTSTART:${toIcsUtc(start)}`,
       `DTEND:${toIcsUtc(end)}`,
       `SUMMARY:${escapeIcs(`${m.type === "exec" ? "[Exec] " : ""}${m.title}`)}`,
@@ -49,7 +53,15 @@ export async function GET(request: NextRequest) {
     "VERSION:2.0",
     "PRODID:-//MUN Dashboard//Meetings//EN",
     "CALSCALE:GREGORIAN",
+    // PUBLISH + refresh hints tell subscribing apps this is a live feed and
+    // roughly how often to re-poll. Apple Calendar honors these; Google runs
+    // its own ~24h refresh regardless, but the stable UIDs mean edits still
+    // land whenever it next syncs.
+    "METHOD:PUBLISH",
     "X-WR-CALNAME:MUN Meetings",
+    "X-WR-CALDESC:Meeting schedule from the MUN Dashboard",
+    "REFRESH-INTERVAL;VALUE=DURATION:PT1H",
+    "X-PUBLISHED-TTL:PT1H",
     ...events,
     "END:VCALENDAR",
   ].join("\r\n");

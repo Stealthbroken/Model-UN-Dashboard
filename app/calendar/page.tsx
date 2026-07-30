@@ -2,8 +2,17 @@ import { prisma } from "@/lib/db";
 import Link from "next/link";
 import { fmtTime } from "@/lib/format";
 import { MeetingsTabs } from "@/components/MeetingsTabs";
+import { CalendarSubscribe } from "@/components/CalendarSubscribe";
 
 export const dynamic = "force-dynamic";
+
+/** Absolute subscribe URL, token included when one is configured. */
+function feedUrl(): { url: string; hasToken: boolean } {
+  const base = (process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000").replace(/\/+$/, "");
+  const token = process.env.CALENDAR_FEED_TOKEN;
+  const url = `${base}/api/calendar/ics${token ? `?token=${encodeURIComponent(token)}` : ""}`;
+  return { url, hasToken: !!token };
+}
 
 const MONTH_NAMES = [
   "January", "February", "March", "April", "May", "June",
@@ -59,6 +68,7 @@ export default async function CalendarPage({
 
   const prevMonth = monthParam(new Date(year, month - 1, 1));
   const nextMonth = monthParam(new Date(year, month + 1, 1));
+  const feed = feedUrl();
 
   return (
     <div>
@@ -92,13 +102,7 @@ export default async function CalendarPage({
           >
             Today
           </Link>
-          <a
-            href="/api/calendar/ics"
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-            title="Download an .ics file — or subscribe in Google Calendar with /api/calendar/ics?token=… (see README)"
-          >
-            📆 iCal
-          </a>
+          <CalendarSubscribe feedUrl={feed.url} hasToken={feed.hasToken} />
         </div>
       </div>
 
