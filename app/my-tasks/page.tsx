@@ -19,9 +19,10 @@ export default async function MyTasksPage() {
     user?.id && executives.some((e) => e.id === user.id) ? user.id : null;
 
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="mb-5">
-        <h1 className="text-2xl font-bold text-gray-900">My Tasks</h1>
+    <div className="mx-auto max-w-3xl">
+      <div className="mb-6">
+        <p className="section-kicker">Your commitments</p>
+        <h1 className="page-heading mt-1">My tasks</h1>
         <p className="text-sm text-gray-500 mt-1">
           {selfId
             ? "Everything assigned to you across all meetings."

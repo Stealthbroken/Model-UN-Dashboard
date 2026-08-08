@@ -35,9 +35,9 @@ export default async function ArchivePage({
   });
 
   return (
-    <div>
+    <div className="page-shell">
       <MeetingsTabs />
-      <h1 className="text-2xl font-bold text-gray-900 mb-1">Past Meetings</h1>
+      <p className="section-kicker">Meeting history</p><h1 className="page-heading mb-1 mt-1">Past meetings</h1>
       <p className="text-sm text-gray-500 mb-4">
         Archive of past and manually-archived meetings.
       </p>

@@ -46,7 +46,7 @@ export function LoginForm({
   }
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+    <div>
       {unclaimed && teamPasswordAllowed && (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
           <p className="font-semibold">First-time setup</p>
@@ -104,7 +104,7 @@ export function LoginForm({
         <button
           type="submit"
           disabled={loading}
-          className="w-full bg-primary-600 text-white py-2.5 rounded-lg font-medium hover:bg-primary-700 transition-colors disabled:opacity-50"
+          className="btn btn-primary w-full"
         >
           {loading ? "Signing in…" : "Sign in"}
         </button>

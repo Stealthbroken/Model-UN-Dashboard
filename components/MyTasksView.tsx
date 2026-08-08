@@ -111,6 +111,12 @@ export function MyTasksView({
   const overdue = open.filter(
     (t) => t.dueDate && new Date(t.dueDate) < new Date(),
   ).length;
+  const now = new Date();
+  const dueSoonLimit = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  const overdueTasks = open.filter((t) => t.dueDate && new Date(t.dueDate) < now);
+  const dueSoonTasks = open.filter((t) => t.dueDate && new Date(t.dueDate) >= now && new Date(t.dueDate) <= dueSoonLimit);
+  const laterTasks = open.filter((t) => t.dueDate && new Date(t.dueDate) > dueSoonLimit);
+  const undatedTasks = open.filter((t) => !t.dueDate);
 
   return (
     <div className="space-y-4">
@@ -167,14 +173,10 @@ export function MyTasksView({
             </p>
           )}
 
-          {/* Open tasks */}
-          {open.length > 0 && (
-            <div className="space-y-2">
-              {open.map((t) => (
-                <TaskCard key={t.id} task={t} busy={busy === t.id} onToggle={toggle} />
-              ))}
-            </div>
-          )}
+          <TaskGroup title="Overdue" tasks={overdueTasks} tone="danger" busy={busy} onToggle={toggle} />
+          <TaskGroup title="Due soon" tasks={dueSoonTasks} tone="warning" busy={busy} onToggle={toggle} />
+          <TaskGroup title="Later" tasks={laterTasks} busy={busy} onToggle={toggle} />
+          <TaskGroup title="No date" tasks={undatedTasks} busy={busy} onToggle={toggle} />
 
           {/* Completed tasks */}
           {done.length > 0 && (
@@ -192,6 +194,32 @@ export function MyTasksView({
         </>
       )}
     </div>
+  );
+}
+
+function TaskGroup({
+  title,
+  tasks,
+  tone = "neutral",
+  busy,
+  onToggle,
+}: {
+  title: string;
+  tasks: TaskWithMeeting[];
+  tone?: "neutral" | "warning" | "danger";
+  busy: string | null;
+  onToggle: (task: TaskWithMeeting) => void;
+}) {
+  if (!tasks.length) return null;
+  const tones = { neutral: "text-gray-500", warning: "text-amber-700", danger: "text-red-700" };
+  return (
+    <section>
+      <div className="mb-2 flex items-center justify-between px-1">
+        <h2 className={`text-xs font-bold uppercase tracking-[0.12em] ${tones[tone]}`}>{title}</h2>
+        <span className="text-xs font-semibold text-gray-400">{tasks.length}</span>
+      </div>
+      <div className="space-y-2">{tasks.map((task) => <TaskCard key={task.id} task={task} busy={busy === task.id} onToggle={onToggle} />)}</div>
+    </section>
   );
 }
 

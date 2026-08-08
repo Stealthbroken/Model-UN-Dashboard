@@ -18,11 +18,16 @@ import {
   getDocTemplates,
 } from "@/lib/settings";
 import { DEFAULT_DOC_TEMPLATES } from "@/lib/doc-templates";
+import { FileText, MessageSquare, Users } from "lucide-react";
+import { cn } from "@/components/ui";
 
 export const dynamic = "force-dynamic";
 
-export default async function ExecutivesPage() {
+type SettingsSection = "team" | "documents" | "communications";
+
+export default async function ExecutivesPage({ searchParams }: { searchParams: { section?: string } }) {
   const user = await getCurrentUser();
+  const section: SettingsSection = searchParams.section === "documents" ? "documents" : searchParams.section === "communications" ? "communications" : "team";
 
   // Middleware already redirects non-Sec-Gens, but re-check here: the cookie's
   // cached role could be stale, and pages must not trust it.
@@ -54,9 +59,10 @@ export default async function ExecutivesPage() {
   );
 
   return (
-    <div className="max-w-3xl">
+    <div className="page-shell max-w-4xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Sec-Gen Panel</h1>
+        <p className="section-kicker">Administration</p>
+        <h1 className="page-heading mt-1">Sec-Gen settings</h1>
         <p className="text-sm text-gray-500 mt-1">
           Roster, account access, and integrations. Signed in as{" "}
           <span className="font-medium text-gray-700">{user.name}</span>
@@ -78,26 +84,23 @@ export default async function ExecutivesPage() {
         </div>
       )}
 
+      <nav className="mb-6 grid grid-cols-3 gap-1 rounded-2xl bg-gray-100 p-1" aria-label="Sec-Gen settings sections">
+        <SettingsTab href="/executives?section=team" active={section === "team"} icon={Users} label="Team & access" />
+        <SettingsTab href="/executives?section=documents" active={section === "documents"} icon={FileText} label="Documents" />
+        <SettingsTab href="/executives?section=communications" active={section === "communications"} icon={MessageSquare} label="Communications" />
+      </nav>
+
       <div className="space-y-6">
-        <AccountsManager
-          initial={rosterOrder.map(toAccountSummary)}
-          viewerRole={user.role}
-          viewerId={user.id}
-          allowTeamPassword={allowTeamPassword}
-          emailConfigured={!!process.env.APPS_SCRIPT_URL}
-        />
-        <ExecutivesManager initial={JSON.parse(JSON.stringify(rosterOrder))} />
-        <MinutesDocSettings initial={JSON.parse(JSON.stringify(settings))} />
-        <TopicGuideSettings
-          initialFolderId={topicGuideFolderId}
-          docsEnabled={!!process.env.APPS_SCRIPT_URL}
-        />
-        <DocTemplatesEditor initial={docTemplates} defaults={DEFAULT_DOC_TEMPLATES} />
-        <DiscordSettings initialUrl={discordWebhookUrl} />
-        <DigestPanel />
+        {section === "team" && <><AccountsManager initial={rosterOrder.map(toAccountSummary)} viewerRole={user.role} viewerId={user.id} allowTeamPassword={allowTeamPassword} emailConfigured={!!process.env.APPS_SCRIPT_URL} /><ExecutivesManager initial={JSON.parse(JSON.stringify(rosterOrder))} /></>}
+        {section === "documents" && <><MinutesDocSettings initial={JSON.parse(JSON.stringify(settings))} /><TopicGuideSettings initialFolderId={topicGuideFolderId} docsEnabled={!!process.env.APPS_SCRIPT_URL} /><DocTemplatesEditor initial={docTemplates} defaults={DEFAULT_DOC_TEMPLATES} /></>}
+        {section === "communications" && <><DiscordSettings initialUrl={discordWebhookUrl} /><DigestPanel /></>}
       </div>
     </div>
   );
+}
+
+function SettingsTab({ href, active, icon: Icon, label }: { href: string; active: boolean; icon: typeof Users; label: string }) {
+  return <Link href={href} className={cn("flex min-h-12 items-center justify-center gap-2 rounded-xl px-2 text-xs font-bold transition sm:text-sm", active ? "bg-white text-primary-900 shadow-sm" : "text-gray-500 hover:text-gray-900")}><Icon size={17} /><span className="hidden sm:inline">{label}</span><span className="sm:hidden">{label.split(" ")[0]}</span></Link>;
 }
 
 function NoAccess() {

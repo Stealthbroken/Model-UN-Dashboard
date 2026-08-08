@@ -16,15 +16,15 @@ const TABS = [
 export function MeetingsTabs() {
   const pathname = usePathname();
   return (
-    <div className="inline-flex bg-gray-100 rounded-lg p-0.5 text-sm mb-5">
+    <div className="mb-5 inline-flex rounded-xl bg-gray-100 p-1 text-sm font-semibold">
       {TABS.map((t) => {
         const active = pathname === t.href;
         return (
           <Link
             key={t.href}
             href={t.href}
-            className={`px-3 py-1 rounded-md transition-colors ${
-              active ? "bg-white text-gray-900 shadow-sm" : "text-gray-600 hover:text-gray-900"
+            className={`rounded-lg px-3 py-1.5 transition-colors ${
+              active ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-900"
             }`}
           >
             {t.label}

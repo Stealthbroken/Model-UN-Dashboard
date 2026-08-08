@@ -7,23 +7,20 @@
  * the previous page did a count per meeting row just to label task totals.
  */
 import { cache } from "react";
-import { prisma, type Meeting, type Task } from "@/lib/db";
+import { prisma } from "@/lib/db";
+import { sortByDueThenPriority, toMeetingCard } from "@/lib/dashboard-utils";
+export type { MeetingCard, ReadinessCheck } from "@/lib/dashboard-utils";
+import type { MeetingCard } from "@/lib/dashboard-utils";
 
-export interface ReadinessCheck {
-  label: string;
-  done: boolean;
-}
-
-export interface MeetingCard {
+export interface DashboardAction {
   id: string;
+  kind: "task" | "meeting";
   title: string;
-  date: string;
-  location: string;
-  type: string;
-  taskCount: number;
-  doneCount: number;
-  checks: ReadinessCheck[];
-  ready: boolean;
+  detail: string;
+  href: string;
+  urgency: "overdue" | "soon" | "upcoming";
+  owner: string | null;
+  completable: boolean;
 }
 
 export interface ExecStanding {
@@ -91,6 +88,7 @@ export interface DashboardData {
   activity: ActivityItem[];
   myTasks: MyTaskItem[] | null;
   myName: string | null;
+  actions: DashboardAction[];
 }
 
 const UPCOMING_LIMIT = 5;
@@ -100,11 +98,14 @@ const ACTIVITY_LIMIT = 6;
 const MY_TASKS_LIMIT = 6;
 
 export const getDashboardData = cache(
-  async (viewerExecId: string | null): Promise<DashboardData> => {
+  async (viewerExecId: string | null, canManageTeam = false): Promise<DashboardData> => {
     const now = new Date();
 
     const [meetings, tasks, attendance, executives] = await Promise.all([
-      prisma.meeting.findMany({ orderBy: { date: "asc" } }),
+      prisma.meeting.findMany({
+        orderBy: { date: "asc" },
+        include: { topicGuide: true, announcement: true },
+      }),
       prisma.task.findMany({}),
       prisma.meetingAttendance.findMany({}),
       prisma.executive.findMany({ orderBy: [{ sortOrder: "asc" }, { name: "asc" }] }),
@@ -242,6 +243,39 @@ export const getDashboardData = cache(
         }));
     }
 
+    const personalActions: DashboardAction[] = (myTasks ?? []).map((task) => ({
+      id: task.id,
+      kind: "task",
+      title: task.description,
+      detail: task.dueDate
+        ? `${task.overdue ? "Overdue" : "Due"} ${new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(task.dueDate))}`
+        : task.meetingTitle,
+      href: `/meetings/${task.meetingId}`,
+      urgency: task.overdue ? "overdue" : task.dueDate ? "soon" : "upcoming",
+      owner: "You",
+      completable: true,
+    }));
+
+    const teamActions: DashboardAction[] = overdue
+      .filter((task) => !viewerExecId || canManageTeam || task.execName === myName)
+      .map((task) => ({
+        id: task.id,
+        kind: "task",
+        title: task.description,
+        detail: `${task.daysLate}d overdue · ${task.meetingTitle}`,
+        href: `/meetings/${task.meetingId}`,
+        urgency: "overdue",
+        owner: task.execName,
+        completable: false,
+      }));
+
+    const seen = new Set<string>();
+    const actions = [...personalActions, ...teamActions].filter((action) => {
+      if (seen.has(action.id)) return false;
+      seen.add(action.id);
+      return true;
+    }).slice(0, 7);
+
     return {
       nextMeeting: upcoming[0] ?? null,
       upcoming,
@@ -256,54 +290,10 @@ export const getDashboardData = cache(
       activity,
       myTasks,
       myName,
+      actions,
     };
   },
 );
-
-/* ─── helpers ─────────────────────────────────────────────────────────────── */
-
-function toMeetingCard(meeting: Meeting, tasks: Task[]): MeetingCard {
-  const isExec = meeting.type === "exec";
-  const doneCount = tasks.filter((t) => t.completed).length;
-
-  // Exec meetings are "ready" when the minutes Doc exists and work is assigned;
-  // regular meetings when the agenda is written.
-  const checks: ReadinessCheck[] = isExec
-    ? [
-        { label: "Minutes doc", done: !!meeting.minutesDocUrl },
-        { label: "Agenda set", done: !!meeting.agenda?.trim() },
-        { label: `${tasks.length} tasks assigned`, done: tasks.length > 0 },
-      ]
-    : [
-        { label: "Agenda set", done: !!meeting.agenda?.trim() },
-        { label: "Location set", done: !!meeting.location?.trim() },
-      ];
-
-  return {
-    id: meeting.id,
-    title: meeting.title,
-    date: meeting.date.toISOString(),
-    location: meeting.location,
-    type: meeting.type,
-    taskCount: tasks.length,
-    doneCount,
-    checks,
-    ready: checks.every((c) => c.done),
-  };
-}
-
-const PRIORITY_WEIGHT: Record<string, number> = { high: 0, medium: 1, low: 2 };
-
-function sortByDueThenPriority(a: Task, b: Task): number {
-  // Dated work first, soonest at the top; then by priority.
-  if (a.dueDate && b.dueDate) {
-    const diff = a.dueDate.getTime() - b.dueDate.getTime();
-    if (diff !== 0) return diff;
-  } else if (a.dueDate) return -1;
-  else if (b.dueDate) return 1;
-
-  return (PRIORITY_WEIGHT[a.priority] ?? 1) - (PRIORITY_WEIGHT[b.priority] ?? 1);
-}
 
 function groupBy<T, K>(items: T[], key: (item: T) => K): Map<K, T[]> {
   const map = new Map<K, T[]>();

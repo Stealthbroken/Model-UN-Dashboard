@@ -15,9 +15,9 @@ export default async function AccountPage() {
   const exec = user.id ? execs.find((e) => e.id === user.id) : null;
 
   return (
-    <div className="max-w-lg">
+    <div className="page-shell max-w-xl">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Your account</h1>
+        <p className="section-kicker">Profile</p><h1 className="page-heading mt-1">Your account</h1>
         <p className="text-sm text-gray-500 mt-1">Sign-in details and password.</p>
       </div>
 

@@ -29,10 +29,10 @@ export function InstagramManager({ posts, apiConfigured }: Props) {
   const posted = posts.filter((p) => p.status === "posted");
 
   return (
-    <div className="max-w-5xl">
+    <div className="page-shell">
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Instagram</h1>
+          <p className="section-kicker">Communications</p><h1 className="page-heading mt-1">Instagram</h1>
           <p className="text-sm text-gray-500 mt-1">
             Pseudo-access to <span className="font-medium">@irhsmodelun</span> — compose, preview, save drafts, and publish.
           </p>

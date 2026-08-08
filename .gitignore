@@ -2,6 +2,8 @@ node_modules
 .next
 .env
 .env*.local
+test-results/
+playwright-report/
 *.db
 *.db-journal
 public/uploads/*

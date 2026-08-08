@@ -71,11 +71,11 @@ export default async function CalendarPage({
   const feed = feedUrl();
 
   return (
-    <div>
+    <div className="page-shell">
       <MeetingsTabs />
       <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Calendar</h1>
+          <p className="section-kicker">Plan ahead</p><h1 className="page-heading mt-1">Calendar</h1>
           <p className="text-sm text-gray-500 mt-1">
             All meetings this month, color-coded by type.
           </p>

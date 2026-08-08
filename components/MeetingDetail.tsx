@@ -7,6 +7,8 @@ import { RichTextEditor } from "@/components/RichTextEditor";
 import { api } from "@/lib/client-api";
 import { useToast } from "@/components/Toast";
 import { fmtDate, fmtDateCompact, fmtDateLong, fmtTime } from "@/lib/format";
+import { BookOpen, CheckCircle2, Circle, ClipboardList, ListTodo, MoreHorizontal, Send, Users } from "lucide-react";
+import { Badge, cn } from "@/components/ui";
 
 interface TopicGuide {
   id: string;
@@ -136,15 +138,17 @@ export function MeetingDetail({
       {/* Meeting Header */}
       <MeetingHeader meeting={meeting} onUpdate={() => router.refresh()} />
 
+      <MeetingWorkflow meeting={meeting} />
+
       {isExec ? (
         <>
           {/* Minutes Doc — shown first */}
-          <div className="mt-6">
+          <div className="mt-6 scroll-mt-24" id="minutes">
             <MinutesDocSection meeting={meeting} onChange={() => router.refresh()} />
           </div>
 
           {/* Attendance */}
-          <div className="mt-6">
+          <div className="mt-6 scroll-mt-24" id="run">
             <AttendanceSection
               meeting={meeting}
               executives={executives}
@@ -153,7 +157,7 @@ export function MeetingDetail({
           </div>
 
           {/* Executives & Tasks */}
-          <div className="mt-6">
+          <div className="mt-6 scroll-mt-24" id="follow-up">
             <ExecutivesTasksSection
               meeting={meeting}
               executives={executives}
@@ -165,20 +169,57 @@ export function MeetingDetail({
       ) : (
         /* Regular meeting: Topic Guide + Classroom Announcement */
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mt-6">
-          <TopicGuideSection
+          <div id="topic-guide" className="scroll-mt-24"><TopicGuideSection
             meetingId={meeting.id}
             guide={meeting.topicGuide}
             onChange={() => router.refresh()}
-          />
-          <ClassroomSection
+          /></div>
+          <div id="publish" className="scroll-mt-24"><ClassroomSection
             meetingId={meeting.id}
             announcement={meeting.announcement}
             defaultTime={defaultAnnouncementTime(meetingDate)}
             onChange={() => router.refresh()}
-          />
+          /></div>
         </div>
       )}
     </div>
+  );
+}
+
+function MeetingWorkflow({ meeting }: { meeting: Meeting }) {
+  const isExec = meeting.type === "exec";
+  const steps = isExec
+    ? [
+        { label: "Prepare", href: "#prepare", icon: ClipboardList, done: !!meeting.agenda?.trim() && !!meeting.minutesDocUrl },
+        { label: "Run meeting", href: "#run", icon: Users, done: meeting.attendance.length > 0 },
+        { label: "Follow up", href: "#follow-up", icon: ListTodo, done: meeting.tasks.length > 0 },
+      ]
+    : [
+        { label: "Prepare", href: "#prepare", icon: ClipboardList, done: !!meeting.agenda?.trim() },
+        { label: "Topic guide", href: "#topic-guide", icon: BookOpen, done: !!meeting.topicGuide },
+        { label: "Publish", href: "#publish", icon: Send, done: !!meeting.announcement },
+      ];
+  const currentIndex = steps.findIndex((step) => !step.done);
+
+  return (
+    <nav className="surface-card mt-4 overflow-x-auto p-2" aria-label="Meeting workflow">
+      <ol className="grid min-w-[32rem] grid-cols-3 gap-1">
+        {steps.map((step, index) => {
+          const Icon = step.icon;
+          const current = currentIndex === index || (currentIndex === -1 && index === steps.length - 1);
+          return (
+            <li key={step.href}>
+              <a href={step.href} aria-current={current ? "step" : undefined} className={cn("flex min-h-14 items-center gap-3 rounded-xl px-3 transition", current ? "bg-primary-100 text-primary-900" : "text-gray-500 hover:bg-gray-50 hover:text-gray-900")}>
+                <span className={cn("flex h-8 w-8 shrink-0 items-center justify-center rounded-lg", step.done ? "bg-green-100 text-green-700" : current ? "bg-white text-primary-800" : "bg-gray-100 text-gray-500")}>
+                  {step.done ? <CheckCircle2 size={17} /> : <Icon size={17} />}
+                </span>
+                <span><span className="block text-[10px] font-bold uppercase tracking-wider opacity-60">Step {index + 1}</span><span className="block text-sm font-bold">{step.label}</span></span>
+              </a>
+            </li>
+          );
+        })}
+      </ol>
+    </nav>
   );
 }
 
@@ -216,7 +257,7 @@ function AttendanceSection({
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-5">
+    <div className="surface-card p-5 sm:p-6">
       <div className="flex items-center justify-between mb-3">
         <h3 className="font-semibold text-gray-900">Attendance</h3>
         <span className="text-xs font-medium px-2 py-0.5 rounded-full bg-gray-100 text-gray-700">
@@ -230,21 +271,19 @@ function AttendanceSection({
           {executives.map((e) => {
             const present = !!presentMap.get(e.id);
             return (
-              <li key={e.id} className="flex items-center gap-3 py-2">
-                <span className="flex-1 text-sm text-gray-800">
-                  {e.name}
-                  {e.role && <span className="text-xs text-gray-400 ml-2">{e.role}</span>}
-                </span>
+              <li key={e.id} className="py-1.5">
                 <button
                   onClick={() => toggle(e.id, !present)}
                   disabled={busy === e.id}
-                  className={`px-3 py-1 rounded-lg text-xs font-medium border transition-colors disabled:opacity-50 ${
+                  className={`flex min-h-12 w-full items-center gap-3 rounded-xl border px-3 text-left transition-colors disabled:opacity-50 ${
                     present
-                      ? "bg-green-50 border-green-300 text-green-700"
-                      : "bg-gray-50 border-gray-300 text-gray-500"
+                      ? "bg-green-50 border-green-300 text-green-800"
+                      : "bg-gray-50 border-transparent text-gray-700 hover:border-gray-300"
                   }`}
                 >
-                  {present ? "✓ Present" : "Absent"}
+                  <span className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${present ? "bg-green-600 text-white" : "border-2 border-gray-300 text-transparent"}`}><CheckCircle2 size={16} /></span>
+                  <span className="min-w-0 flex-1"><span className="block text-sm font-semibold">{e.name}</span>{e.role && <span className="block truncate text-xs opacity-65">{e.role}</span>}</span>
+                  <span className="text-xs font-bold">{present ? "Present" : "Mark present"}</span>
                 </button>
               </li>
             );
@@ -896,7 +935,7 @@ function MeetingHeader({ meeting, onUpdate }: { meeting: Meeting; onUpdate: () =
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
+    <div id="prepare" className="surface-card scroll-mt-24 p-5 sm:p-6">
       <div className="flex items-start justify-between mb-4 gap-3">
         <div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -920,26 +959,18 @@ function MeetingHeader({ meeting, onUpdate }: { meeting: Meeting; onUpdate: () =
             {fmtTime(date)} • {meeting.location}
           </p>
         </div>
-        <div className="flex gap-2 flex-wrap justify-end">
-          <button
-            onClick={() => (editing ? save() : setEditing(true))}
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            {editing ? "Save" : "Edit"}
-          </button>
-          <button
-            onClick={archiveToggle}
-            className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
-          >
-            {isArchived ? "Unarchive" : "Archive"}
-          </button>
-          <button
-            onClick={remove}
-            className="px-3 py-1.5 text-sm border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-          >
-            Delete
-          </button>
-        </div>
+        {editing ? (
+          <button onClick={save} className="btn btn-primary">Save changes</button>
+        ) : (
+          <details className="relative">
+            <summary className="btn btn-secondary cursor-pointer list-none" aria-label="Meeting actions"><MoreHorizontal size={18} />Actions</summary>
+            <div className="absolute right-0 top-12 z-20 w-44 rounded-xl border border-gray-200 bg-white p-1.5 shadow-xl">
+              <button onClick={() => setEditing(true)} className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-100">Edit meeting</button>
+              <button onClick={archiveToggle} className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-gray-700 hover:bg-gray-100">{isArchived ? "Unarchive" : "Archive"}</button>
+              <button onClick={remove} className="w-full rounded-lg px-3 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50">Delete meeting</button>
+            </div>
+          </details>
+        )}
       </div>
 
       {editing ? (

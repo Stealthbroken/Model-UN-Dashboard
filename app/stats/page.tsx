@@ -1,4 +1,5 @@
 import { prisma, type Task, type MeetingAttendance } from "@/lib/db";
+import { Download } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -30,10 +31,10 @@ export default async function StatsPage() {
     .sort((a, b) => (b.completionRate ?? -1) - (a.completionRate ?? -1));
 
   return (
-    <div className="max-w-3xl">
+    <div className="page-shell max-w-4xl">
       <div className="mb-6 flex items-start justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Executive Stats</h1>
+          <p className="section-kicker">Team pulse</p><h1 className="page-heading mt-1">Executive stats</h1>
           <p className="text-sm text-gray-500 mt-1">
             Task completion and attendance across all exec meetings.
           </p>
@@ -41,9 +42,9 @@ export default async function StatsPage() {
         <a
           href="/api/stats/export"
           download
-          className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors shrink-0"
+          className="btn btn-secondary shrink-0"
         >
-          ⬇ Export CSV
+          <Download size={16} />Export CSV
         </a>
       </div>
 
@@ -56,7 +57,7 @@ export default async function StatsPage() {
           {rows.map((r, idx) => (
             <div
               key={r.id}
-              className="bg-white rounded-xl border border-gray-200 shadow-sm p-4"
+              className="surface-card p-4"
             >
               <div className="flex items-center gap-3 mb-3">
                 <span className="w-6 h-6 rounded-full bg-gray-100 text-gray-500 text-xs font-bold flex items-center justify-center shrink-0">

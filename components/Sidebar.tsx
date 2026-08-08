@@ -1,39 +1,45 @@
 "use client";
 
-/**
- * App shell: sidebar navigation, command palette, and the signed-in identity.
- * Collapses to a slide-over on small screens so the dashboard is usable from a
- * phone during meetings.
- */
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import {
+  Archive, BarChart3, BookOpen, CalendarDays, Camera, CheckSquare2, ExternalLink,
+  Globe2, Home, Menu, Settings2, Users, X, type LucideIcon,
+} from "lucide-react";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { CommandPalette } from "@/components/CommandPalette";
+import { cn } from "@/components/ui";
 
 interface NavItem {
   href: string;
   label: string;
-  icon: string;
+  icon: LucideIcon;
+  paletteIcon: string;
   external?: boolean;
-  /** Hidden from accounts without Sec-Gen access. */
+  match?: string[];
   secgenOnly?: boolean;
 }
 
-const dashboardNav: NavItem[] = [
-  { href: "/", icon: "🏠", label: "Dashboard" },
-  { href: "/meetings", icon: "📅", label: "Meetings" },
-  { href: "/my-tasks", icon: "✅", label: "My Tasks" },
-  { href: "/topics", icon: "💡", label: "Topic Bank" },
-  //{ href: "/stats", icon: "📊", label: "Exec Stats" },
-  //{ href: "/instagram", icon: "📷", label: "Instagram" },
-  { href: "/executives", icon: "🔑", label: "Sec-Gen Panel", secgenOnly: true },
+const primaryNav: NavItem[] = [
+  { href: "/", icon: Home, paletteIcon: "H", label: "Home" },
+  { href: "/meetings", icon: CalendarDays, paletteIcon: "M", label: "Meetings", match: ["/meetings", "/calendar", "/archive"] },
+  { href: "/my-tasks", icon: CheckSquare2, paletteIcon: "T", label: "My Tasks" },
+  { href: "/topics", icon: BookOpen, paletteIcon: "B", label: "Topics" },
+];
+
+const toolsNav: NavItem[] = [
+  { href: "/stats", icon: BarChart3, paletteIcon: "S", label: "Team Stats" },
+  { href: "/instagram", icon: Camera, paletteIcon: "I", label: "Instagram" },
+];
+
+const adminNav: NavItem[] = [
+  { href: "/executives", icon: Settings2, paletteIcon: "A", label: "Sec-Gen Settings", secgenOnly: true },
 ];
 
 const shortcuts: NavItem[] = [
-  //{ href: "https://app.slack.com/client/T09DZJJ5UE5", icon: "💬", label: "Slack", external: true },
-  { href: "https://classroom.google.com/u/0/c/NDI4NzY3NDUzNzNa", icon: "🏫", label: "Classroom", external: true },
-  { href: "https://drive.google.com/drive/u/0/folders/1K5Q-qlF0RIVPJGQaIViOYQQTHYpJrR_x", icon: "🗄️", label: "Drive", external: true },
+  { href: "https://classroom.google.com/u/0/c/NDI4NzY3NDUzNzNa", icon: Users, paletteIcon: "C", label: "Classroom", external: true },
+  { href: "https://drive.google.com/drive/u/0/folders/1K5Q-qlF0RIVPJGQaIViOYQQTHYpJrR_x", icon: Archive, paletteIcon: "D", label: "Drive", external: true },
 ];
 
 export interface ShellUser {
@@ -45,177 +51,98 @@ export interface ShellUser {
 
 export function Sidebar({ user }: { user: ShellUser }) {
   const pathname = usePathname();
-  const [mobileOpen, setMobileOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
+  const visibleAdmin = adminNav.filter((item) => !item.secgenOnly || user.canSecgen);
+  const paletteItems = [...primaryNav, ...toolsNav, ...visibleAdmin].map((item) => ({ href: item.href, label: item.label, icon: item.paletteIcon }));
 
-  // Close the slide-over on navigation — otherwise it covers the new page.
+  useEffect(() => setMoreOpen(false), [pathname]);
   useEffect(() => {
-    setMobileOpen(false);
-  }, [pathname]);
-
-  // Lock background scroll while the slide-over is up.
-  useEffect(() => {
-    if (!mobileOpen) return;
-    const prev = document.body.style.overflow;
+    if (!moreOpen) return;
+    const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [mobileOpen]);
-
-  const visibleNav = dashboardNav.filter((item) => !item.secgenOnly || user.canSecgen);
+    return () => { document.body.style.overflow = previous; };
+  }, [moreOpen]);
 
   return (
     <>
-      {/* Mobile top bar */}
-      <header className="lg:hidden sticky top-0 z-40 flex items-center gap-3 px-4 py-3 bg-white border-b border-gray-200">
-        <button
-          onClick={() => setMobileOpen(true)}
-          className="p-1.5 -ml-1.5 rounded-lg text-gray-600 hover:bg-gray-100"
-          aria-label="Open menu"
-          aria-expanded={mobileOpen}
-        >
-          <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-            <path d="M3 5h14M3 10h14M3 15h14" stroke="currentColor" strokeWidth="1.75" strokeLinecap="round" />
-          </svg>
-        </button>
-        <span className="font-bold text-gray-900">MUN Dashboard</span>
-        <span className="ml-auto text-xs text-gray-400 truncate max-w-[8rem]">{user.name}</span>
+      <header className="sticky top-0 z-30 flex h-14 items-center border-b border-gray-200 bg-white/95 px-4 backdrop-blur lg:hidden">
+        <Brand compact />
+        <Link href="/account" className="ml-auto rounded-full bg-primary-100 px-2.5 py-1 text-xs font-bold text-primary-900">{initials(user.name)}</Link>
       </header>
 
-      {/* Mobile slide-over */}
-      {mobileOpen && (
-        <div
-          className="lg:hidden fixed inset-0 z-50 bg-gray-900/40"
-          onClick={() => setMobileOpen(false)}
-        >
-          <div
-            className="w-72 max-w-[85vw] h-full bg-white shadow-xl overflow-y-auto"
-            onClick={(e) => e.stopPropagation()}
-          >
-            <SidebarBody
-              pathname={pathname}
-              nav={visibleNav}
-              user={user}
-              onClose={() => setMobileOpen(false)}
-            />
-          </div>
+      <aside className="hidden min-h-screen w-64 shrink-0 flex-col border-r border-gray-200 bg-white lg:sticky lg:top-0 lg:flex lg:h-screen">
+        <div className="border-b border-gray-100 px-5 py-5"><Brand /></div>
+        <div className="px-4 pt-4"><CommandPalette navItems={paletteItems} /></div>
+        <nav className="flex-1 overflow-y-auto px-3 py-5">
+          <NavSection items={primaryNav} pathname={pathname} />
+          <NavGroup label="Tools"><NavSection items={toolsNav} pathname={pathname} /></NavGroup>
+          {visibleAdmin.length > 0 && <NavGroup label="Administration"><NavSection items={visibleAdmin} pathname={pathname} /></NavGroup>}
+          <NavGroup label="Shortcuts"><NavSection items={shortcuts} pathname={pathname} /></NavGroup>
+        </nav>
+        <AccountFooter user={user} pathname={pathname} />
+      </aside>
+
+      <nav className="fixed inset-x-0 bottom-0 z-40 grid grid-cols-5 border-t border-gray-200 bg-white/95 px-1 pb-[max(0.35rem,env(safe-area-inset-bottom))] pt-1 backdrop-blur lg:hidden" aria-label="Primary navigation">
+        {primaryNav.map((item) => <MobileNavItem key={item.href} item={item} pathname={pathname} />)}
+        <button type="button" onClick={() => setMoreOpen(true)} className="flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-semibold text-gray-500" aria-expanded={moreOpen}><Menu size={21} aria-hidden="true" />More</button>
+      </nav>
+
+      {moreOpen && (
+        <div className="fixed inset-0 z-50 bg-ink/45 lg:hidden" onClick={() => setMoreOpen(false)}>
+          <section className="absolute inset-x-0 bottom-0 max-h-[85vh] overflow-y-auto rounded-t-3xl bg-white px-4 pb-8 pt-3 shadow-2xl" onClick={(event) => event.stopPropagation()} aria-label="More navigation">
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-gray-300" />
+            <div className="mb-4 flex items-center justify-between"><Brand compact /><button type="button" onClick={() => setMoreOpen(false)} className="btn btn-quiet !min-h-9 !px-2" aria-label="Close menu"><X size={20} /></button></div>
+            <CommandPalette navItems={paletteItems} />
+            <div className="mt-5 grid grid-cols-2 gap-2">{[...toolsNav, ...visibleAdmin, ...shortcuts].map((item) => <SheetLink key={item.href} item={item} pathname={pathname} />)}</div>
+            <div className="mt-5 border-t border-gray-100 pt-4"><AccountFooter user={user} pathname={pathname} mobile /></div>
+          </section>
         </div>
       )}
-
-      {/* Desktop sidebar */}
-      <aside className="hidden lg:flex w-64 shrink-0 bg-white border-r border-gray-200 min-h-screen flex-col">
-        <SidebarBody pathname={pathname} nav={visibleNav} user={user} />
-      </aside>
     </>
   );
 }
 
-function SidebarBody({
-  pathname,
-  nav,
-  user,
-  onClose,
-}: {
-  pathname: string;
-  nav: NavItem[];
-  user: ShellUser;
-  onClose?: () => void;
-}) {
-  return (
-    <div className="flex flex-col min-h-full p-5">
-      <div className="mb-4 flex items-start justify-between gap-2">
-        <div>
-          <h1 className="text-lg font-bold text-gray-900">MUN Dashboard</h1>
-          <p className="text-xs text-gray-500 mt-0.5">Executive Team</p>
-        </div>
-        {onClose && (
-          <button
-            onClick={onClose}
-            className="p-1 -mr-1 -mt-1 text-xl leading-none text-gray-400 hover:text-gray-700"
-            aria-label="Close menu"
-          >
-            ×
-          </button>
-        )}
-      </div>
+function Brand({ compact = false }: { compact?: boolean }) {
+  return <Link href="/" className="flex items-center gap-3 text-gray-900"><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-ink text-white shadow-sm"><Globe2 size={21} aria-hidden="true" /></span><span><span className={cn("block font-extrabold leading-none tracking-tight", compact ? "text-sm" : "text-base")}>IRHS Model UN</span>{!compact && <span className="mt-1 block text-[10px] font-bold uppercase tracking-[0.17em] text-primary-700">Executive workspace</span>}</span></Link>;
+}
 
-      <div className="mb-4">
-        <CommandPalette navItems={nav.filter((n) => !n.external)} />
-      </div>
-
-      <nav className="flex-1 space-y-5">
-        <NavSection items={nav} pathname={pathname} />
-        <div>
-          <p className="text-[10px] font-semibold uppercase tracking-wider text-gray-400 px-3 mb-1.5">
-            Shortcuts
-          </p>
-          <NavSection items={shortcuts} pathname={pathname} />
-        </div>
-      </nav>
-
-      <div className="pt-4 mt-4 border-t border-gray-100 space-y-2">
-        <Link
-          href="/account"
-          className={`flex items-center gap-2.5 px-3 py-2 rounded-lg transition-colors ${
-            pathname === "/account" ? "bg-primary-50" : "hover:bg-gray-100"
-          }`}
-        >
-          <span className="w-7 h-7 shrink-0 rounded-full bg-primary-100 text-primary-800 text-xs font-bold flex items-center justify-center">
-            {initials(user.name)}
-          </span>
-          <span className="flex-1 min-w-0">
-            <span className="block text-sm font-medium text-gray-900 truncate">{user.name}</span>
-            <span className="block text-[11px] text-gray-500 truncate">
-              {user.viaTeamPassword ? "Team password" : user.roleLabel}
-            </span>
-          </span>
-        </Link>
-
-        <p className="text-[11px] text-gray-400 px-3">Thursdays · 11:10 AM · Room 137</p>
-        <ThemeToggle />
-        <form action="/api/auth/logout" method="POST">
-          <button
-            type="submit"
-            className="w-full text-left px-3 py-2 text-sm text-gray-500 hover:text-red-600 transition-colors"
-          >
-            Log out
-          </button>
-        </form>
-      </div>
-    </div>
-  );
+function NavGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return <div className="mt-6"><p className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-gray-400">{label}</p>{children}</div>;
 }
 
 function NavSection({ items, pathname }: { items: NavItem[]; pathname: string }) {
-  return (
-    <div className="space-y-0.5">
-      {items.map((item) => {
-        const isActive = !item.external && pathname === item.href;
-        return (
-          <Link
-            key={item.href}
-            href={item.href}
-            target={item.external ? "_blank" : undefined}
-            rel={item.external ? "noopener noreferrer" : undefined}
-            className={`flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
-              isActive
-                ? "bg-primary-50 text-primary-700"
-                : "text-gray-600 hover:bg-gray-100 hover:text-gray-900"
-            }`}
-          >
-            <span>{item.icon}</span>
-            <span className="flex-1">{item.label}</span>
-            {item.external && <span className="text-[10px] text-gray-400">↗</span>}
-          </Link>
-        );
-      })}
-    </div>
-  );
+  return <div className="space-y-1">{items.map((item) => <DesktopNavItem key={item.href} item={item} pathname={pathname} />)}</div>;
+}
+
+function activeFor(item: NavItem, pathname: string) {
+  if (item.external) return false;
+  if (item.match) return item.match.some((path) => pathname === path || pathname.startsWith(`${path}/`));
+  return pathname === item.href || (item.href !== "/" && pathname.startsWith(`${item.href}/`));
+}
+
+function DesktopNavItem({ item, pathname }: { item: NavItem; pathname: string }) {
+  const Icon = item.icon;
+  const active = activeFor(item, pathname);
+  return <Link href={item.href} target={item.external ? "_blank" : undefined} rel={item.external ? "noopener noreferrer" : undefined} className={cn("flex min-h-10 items-center gap-3 rounded-xl px-3 text-sm font-semibold transition", active ? "bg-primary-100 text-primary-900" : "text-gray-600 hover:bg-gray-100 hover:text-gray-900")}><Icon size={18} strokeWidth={active ? 2.4 : 2} aria-hidden="true" /><span className="flex-1">{item.label}</span>{item.external && <ExternalLink size={13} className="text-gray-400" />}</Link>;
+}
+
+function MobileNavItem({ item, pathname }: { item: NavItem; pathname: string }) {
+  const Icon = item.icon;
+  const active = activeFor(item, pathname);
+  return <Link href={item.href} className={cn("flex min-h-14 flex-col items-center justify-center gap-1 rounded-xl text-[10px] font-semibold", active ? "text-primary-800" : "text-gray-500")}><Icon size={21} strokeWidth={active ? 2.6 : 2} aria-hidden="true" />{item.label.replace("My ", "")}</Link>;
+}
+
+function SheetLink({ item, pathname }: { item: NavItem; pathname: string }) {
+  const Icon = item.icon;
+  return <Link href={item.href} target={item.external ? "_blank" : undefined} rel={item.external ? "noopener noreferrer" : undefined} className={cn("flex min-h-14 items-center gap-3 rounded-2xl border px-3 text-sm font-semibold", activeFor(item, pathname) ? "border-primary-200 bg-primary-50 text-primary-900" : "border-gray-200 text-gray-700")}><Icon size={19} />{item.label}</Link>;
+}
+
+function AccountFooter({ user, pathname, mobile = false }: { user: ShellUser; pathname: string; mobile?: boolean }) {
+  return <div className={cn(!mobile && "border-t border-gray-100 p-3")}><Link href="/account" className={cn("flex items-center gap-3 rounded-xl px-3 py-2.5", pathname === "/account" ? "bg-primary-50" : "hover:bg-gray-100")}><span className="flex h-9 w-9 items-center justify-center rounded-xl bg-primary-100 text-xs font-extrabold text-primary-900">{initials(user.name)}</span><span className="min-w-0 flex-1"><span className="block truncate text-sm font-semibold text-gray-900">{user.name}</span><span className="block truncate text-[11px] text-gray-500">{user.viaTeamPassword ? "Shared team access" : user.roleLabel}</span></span></Link><ThemeToggle /><form action="/api/auth/logout" method="POST"><button type="submit" className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-gray-500 hover:bg-red-50 hover:text-red-600">Log out</button></form></div>;
 }
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean);
-  if (parts.length === 0) return "?";
-  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  if (!parts.length) return "?";
+  return parts.length === 1 ? parts[0].slice(0, 2).toUpperCase() : `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
 }

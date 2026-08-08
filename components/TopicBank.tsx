@@ -9,6 +9,8 @@ import { TOPIC_CATEGORIES, TOPIC_DIFFICULTIES } from "@/lib/topic-seeds";
 import { api } from "@/lib/client-api";
 import { useToast } from "@/components/Toast";
 import { TopicGuideLink } from "@/components/TopicGuideLink";
+import { Plus, Search, SlidersHorizontal, Sparkles } from "lucide-react";
+import { cn } from "@/components/ui";
 
 // Dates round-trip through JSON, so they arrive as strings here.
 export interface Topic {
@@ -128,6 +130,7 @@ export function TopicBank({
   const [suggesting, setSuggesting] = useState(false);
   const [suggestNotice, setSuggestNotice] = useState<string | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [filtersOpen, setFiltersOpen] = useState(false);
 
   const meetingById = useMemo(
     () => new Map(meetings.map((m) => [m.id, m])),
@@ -404,10 +407,11 @@ export function TopicBank({
   /* ─── render ────────────────────────────────────────────────────────────── */
 
   return (
-    <div className="max-w-5xl">
+    <div className="page-shell">
       <div className="mb-5 flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-900">Topic Bank</h1>
+          <p className="section-kicker">Build the agenda</p>
+          <h1 className="page-heading mt-1">Topic bank</h1>
           <p className="text-sm text-gray-500 mt-1 max-w-xl">
             Brainstorm and rotate through debate topics. Vote to rank them, attach a Google Docs
             topic guide, and push the winner straight onto a meeting agenda.
@@ -417,16 +421,16 @@ export function TopicBank({
           <button
             onClick={loadSuggestions}
             disabled={suggesting}
-            className="px-3 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg text-sm font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+            className="btn btn-secondary"
             title={aiEnabled ? "Mix of curated + AI suggestions" : "Curated only — set GEMINI_API_KEY to enable AI"}
           >
-            {suggesting ? "Thinking…" : "✨ Suggest topics"}
+            <Sparkles size={16} aria-hidden="true" />{suggesting ? "Thinking…" : "Suggest topics"}
           </button>
           <button
             onClick={() => { setAdding(true); setEditingId(null); }}
-            className="px-3 py-2 bg-primary-600 text-white rounded-lg text-sm font-medium hover:bg-primary-700 transition-colors"
+            className="btn btn-primary"
           >
-            + New topic
+            <Plus size={16} aria-hidden="true" />New topic
           </button>
         </div>
       </div>
@@ -476,8 +480,10 @@ export function TopicBank({
         </div>
       )}
 
+      <button type="button" onClick={() => setFiltersOpen((value) => !value)} className="btn btn-secondary mb-3 w-full md:hidden" aria-expanded={filtersOpen}><SlidersHorizontal size={17} />Filters{filtersActive && <span className="h-2 w-2 rounded-full bg-primary-600" />}</button>
+
       {/* Search + filters */}
-      <div className="mb-4 space-y-2.5">
+      <div className={cn("mb-4 space-y-2.5", filtersOpen ? "block" : "hidden md:block")}>
         <div className="flex flex-wrap gap-2">
           <div className="relative flex-1 min-w-[12rem]">
             <input
@@ -487,7 +493,7 @@ export function TopicBank({
               className="input pl-8"
               aria-label="Search topics"
             />
-            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">🔍</span>
+            <Search size={15} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" aria-hidden="true" />
           </div>
           <select
             value={category}
@@ -524,7 +530,7 @@ export function TopicBank({
         </div>
 
         <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
-          <div className="inline-flex bg-gray-100 rounded-lg p-0.5 text-sm">
+          <div className="inline-flex max-w-full overflow-x-auto rounded-xl bg-gray-100 p-1 text-sm">
             {STATUS_TABS.map((tab) => (
               <button
                 key={tab.key}

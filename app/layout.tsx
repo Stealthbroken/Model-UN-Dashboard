@@ -6,9 +6,21 @@ import { getCurrentUser } from "@/lib/auth";
 import { ROLE_LABEL } from "@/lib/session";
 
 export const metadata: Metadata = {
-  title: "MUN Dashboard",
-  description: "Model United Nations Club Executive Dashboard",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_BASE_URL || "http://localhost:3000"),
+  title: "IRHS Model UN — Executive Workspace",
+  description: "Plan meetings, manage tasks, and keep the IRHS Model UN executive team ready.",
   icons: { icon: "/favicon.ico" },
+  openGraph: {
+    title: "IRHS Model UN",
+    description: "Ready for every meeting.",
+    images: [{ url: "/og.png", width: 1536, height: 1024, alt: "IRHS Model UN executive workspace" }],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "IRHS Model UN",
+    description: "Ready for every meeting.",
+    images: ["/og.png"],
+  },
 };
 
 export const viewport: Viewport = {
@@ -35,7 +47,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
       </head>
-      <body className="bg-gray-50 min-h-screen">
+      <body className="bg-canvas min-h-screen text-gray-900 antialiased">
         <ToastProvider>
           {user ? (
             <div className="lg:flex min-h-screen">
@@ -47,7 +59,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   viaTeamPassword: user.viaTeamPassword,
                 }}
               />
-              <main className="flex-1 min-w-0 p-4 sm:p-6 lg:p-8">{children}</main>
+              <main className="flex-1 min-w-0 px-4 pb-24 pt-5 sm:px-6 sm:pt-7 lg:px-10 lg:pb-10 lg:pt-9">{children}</main>
             </div>
           ) : (
             children
